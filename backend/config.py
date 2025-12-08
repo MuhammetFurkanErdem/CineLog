@@ -16,14 +16,14 @@ class Settings(BaseSettings):
     # Google OAuth ayarları
     google_client_id: str = ""
     google_client_secret: str = ""
-    google_redirect_uri: str = "http://127.0.0.1:5500/callback"
+    google_redirect_uri: str = "http://localhost:5174/callback"
     
     # TMDB API ayarları
     tmdb_api_key: str = ""
     tmdb_base_url: str = "https://api.themoviedb.org/3"
     
     # CORS ayarları
-    cors_origins: list = ["http://127.0.0.1:5500", "http://localhost:5500"]
+    cors_origins: list = ["http://localhost:5174", "http://127.0.0.1:5174"]
     
     class Config:
         env_file = ".env"

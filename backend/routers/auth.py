@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from google.oauth2 import id_token
-from google.auth.transport import requests
+from google.auth.transport import requests as google_requests
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from typing import Optional
+import httpx
 
 from database import get_db
 from models import User
@@ -47,10 +48,10 @@ async def google_login(auth_data: GoogleAuthRequest, db: Session = Depends(get_d
     Google'dan gelen ID token'ı doğrular ve kullanıcıyı sisteme kaydeder/giriş yapar.
     """
     try:
-        # Google token'ı doğrula
+        # Google ID token'ı doğrula
         idinfo = id_token.verify_oauth2_token(
-            auth_data.token, 
-            requests.Request(), 
+            auth_data.token,
+            google_requests.Request(),
             settings.google_client_id
         )
         
@@ -84,21 +85,45 @@ async def google_login(auth_data: GoogleAuthRequest, db: Session = Depends(get_d
     
     except ValueError as e:
         # Token geçersiz
+        print(f"Google token validation error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Geçersiz Google token"
+            detail=f"Geçersiz Google token: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Diğer hatalar
+        print(f"Login error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Giriş hatası: {str(e)}"
         )
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(
-    token: str,
+    authorization: str = Header(...),
     db: Session = Depends(get_db)
 ):
     """
     Mevcut kullanıcının bilgilerini döndürür.
     Header'da Bearer token ile gönderilmelidir.
     """
+    # Bearer token'ı parse et
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != 'bearer':
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Geçersiz authentication scheme"
+            )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Geçersiz authorization header"
+        )
+    
     user_id = verify_token(token)
     if not user_id:
         raise HTTPException(
