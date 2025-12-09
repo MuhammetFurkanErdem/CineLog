@@ -29,9 +29,19 @@ class UserResponse(UserBase):
 
 class UserStats(BaseModel):
     """Kullanıcı istatistikleri"""
-    total_films: int
+    total_movies: int
+    total_series: int
     average_rating: Optional[float] = None
-    total_friends: int
+    total_watch_time: int  # Dakika cinsinden
+    total_reviews: int
+    total_followers: int
+    total_following: int
+    movies_this_month: int
+    movies_this_year: int
+    series_watching: int
+    series_completed: int
+    total_watch_hours: int  # Saat cinsinden
+    badges: list = []
 
 
 # ==================== FILM SCHEMAS ====================
