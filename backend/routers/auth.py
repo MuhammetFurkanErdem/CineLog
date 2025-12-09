@@ -65,9 +65,21 @@ async def google_login(auth_data: GoogleAuthRequest, db: Session = Depends(get_d
         user = db.query(User).filter(User.google_id == google_id).first()
         
         if not user:
+            # Benzersiz username oluştur
+            base_username = email.split('@')[0].lower()
+            # Alfasayısal karakterler ve alt çizgi dışındaki karakterleri kaldır
+            base_username = ''.join(c if c.isalnum() or c == '_' else '' for c in base_username)
+            
+            # Eğer username zaten varsa sonuna sayı ekle
+            username = base_username
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
             # Yeni kullanıcı oluştur
             user = User(
-                username=name,
+                username=username,
                 email=email,
                 google_id=google_id,
                 picture=picture

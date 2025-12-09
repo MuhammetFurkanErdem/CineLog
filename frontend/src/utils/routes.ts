@@ -1,14 +1,19 @@
 import { createBrowserRouter } from "react-router";
-import { Root } from "../components/Root";
-import { Home } from "../components/Home";
-import { Discover } from "../components/Discover";
-import { Profile } from "../components/Profile";
-import { MovieDetail } from "../components/MovieDetail";
-import { Friends } from "../components/Friends";
-import { Stats } from "../components/Stats";
-import { NotFound } from "../components/NotFound";
+import { Root } from "../components/layouts/Root";
+import { Home } from "../components/pages/Home";
+import { Discover } from "../components/pages/Discover";
+import { Profile } from "../components/pages/Profile";
+import { MovieDetail } from "../components/pages/MovieDetail";
+import { Friends } from "../components/pages/Friends";
+import { Stats } from "../components/pages/Stats";
+import { NotFound } from "../components/pages/NotFound";
+import LoginPage from "../components/pages/LoginPage";
 
 export const router = createBrowserRouter([
+  {
+    path: "/login",
+    Component: LoginPage,
+  },
   {
     path: "/",
     Component: Root,

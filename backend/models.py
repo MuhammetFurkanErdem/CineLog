@@ -46,7 +46,9 @@ class Film(Base):
     # Kullanıcıya özel alanlar
     kisisel_puan = Column(Float, nullable=True)  # Kullanıcının verdiği puan (0-10)
     kisisel_yorum = Column(Text, nullable=True)  # Kullanıcının yorumu
-    izlendi = Column(Boolean, default=True)  # İzlenme durumu
+    izlendi = Column(Boolean, default=False)  # İzlenme durumu
+    is_favorite = Column(Boolean, default=False)  # Favori durumu
+    is_watchlist = Column(Boolean, default=False)  # İzleme listesi durumu
     izlenme_tarihi = Column(DateTime, default=datetime.utcnow)
     
     # İlişkiler

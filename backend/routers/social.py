@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
-from typing import List
+from typing import List, Optional, Union
 
 from database import get_db
 from models import User, Film, Friendship
@@ -9,6 +9,7 @@ from schemas import (
     FriendshipCreate, 
     FriendshipResponse, 
     FriendshipUpdate,
+    FriendshipWithUser,
     CompatibilityScore,
     FeedItem,
     UserResponse,
@@ -20,9 +21,17 @@ router = APIRouter()
 settings = get_settings()
 
 
-async def get_current_user_id(token: str, db: Session = Depends(get_db)) -> int:
-    """Token'dan kullanıcı ID'sini döndürür"""
+async def get_current_user_id(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> int:
+    """Authorization header'dan token'ı alır ve kullanıcı ID'sini döndürür"""
     from routers.auth import verify_token
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token bulunamadı"
+        )
+    
+    token = authorization.replace("Bearer ", "")
     user_id = verify_token(token)
     if not user_id:
         raise HTTPException(
@@ -35,13 +44,13 @@ async def get_current_user_id(token: str, db: Session = Depends(get_db)) -> int:
 @router.post("/friends/request", response_model=FriendshipResponse)
 async def send_friend_request(
     friend_data: FriendshipCreate,
-    token: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
 ):
     """
     Arkadaşlık isteği gönderir.
     """
-    user_id = await get_current_user_id(token, db)
+    user_id = await get_current_user_id(authorization, db)
     
     # Kendine istek gönderilemez
     if user_id == friend_data.friend_id:
@@ -58,18 +67,26 @@ async def send_friend_request(
             detail="Kullanıcı bulunamadı"
         )
     
-    # Daha önce istek gönderilmiş mi kontrol et
+    # Daha önce aktif/bekleyen istek var mı kontrol et (rejected kayıtlar hariç)
     existing = db.query(Friendship).filter(
         or_(
             and_(Friendship.user_id == user_id, Friendship.friend_id == friend_data.friend_id),
             and_(Friendship.user_id == friend_data.friend_id, Friendship.friend_id == user_id)
+        ),
+        or_(
+            Friendship.status == "pending",
+            Friendship.status == "accepted"
         )
     ).first()
     
     if existing:
+        if existing.status == "pending":
+            detail = "Bu kullanıcıya zaten bir arkadaşlık isteği gönderdınız veya bu kullanıcıdan bir istek bekliyor"
+        else:
+            detail = "Bu kullanıcıyla zaten arkadaşsınız"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bu kullanıcıyla zaten bir arkadaşlık ilişkiniz var"
+            detail=detail
         )
     
     # Yeni arkadaşlık isteği oluştur
@@ -86,32 +103,52 @@ async def send_friend_request(
     return friendship
 
 
-@router.get("/friends/requests", response_model=List[FriendshipResponse])
-async def get_friend_requests(token: str, db: Session = Depends(get_db)):
+@router.get("/friends/requests", response_model=List[FriendshipWithUser])
+async def get_friend_requests(
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
     """
     Kullanıcıya gelen arkadaşlık isteklerini döndürür.
+    İsteği gönderen kullanıcı bilgileriyle birlikte.
     """
-    user_id = await get_current_user_id(token, db)
+    user_id = await get_current_user_id(authorization, db)
     
     requests = db.query(Friendship).filter(
         Friendship.friend_id == user_id,
         Friendship.status == "pending"
     ).all()
     
-    return requests
+    # Her istek için kullanıcı bilgisini ekle
+    result = []
+    for request in requests:
+        user = db.query(User).filter(User.id == request.user_id).first()
+        if user:
+            result.append({
+                "id": request.id,
+                "user_id": request.user_id,
+                "friend_id": request.friend_id,
+                "status": request.status,
+                "created_at": request.created_at,
+                "user": user
+            })
+    
+    return result
 
 
-@router.put("/friends/requests/{friendship_id}", response_model=FriendshipResponse)
+@router.put("/friends/requests/{friendship_id}")
 async def respond_to_friend_request(
     friendship_id: int,
     response: FriendshipUpdate,
-    token: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
 ):
     """
     Arkadaşlık isteğini kabul eder veya reddeder.
+    Instagram mantığı: Kabul edilince tek yönlü takip oluşur.
+    Reddedilince kayıt silinir, böylece tekrar istek gönderilebilir.
     """
-    user_id = await get_current_user_id(token, db)
+    user_id = await get_current_user_id(authorization, db)
     
     friendship = db.query(Friendship).filter(
         Friendship.id == friendship_id,
@@ -124,6 +161,13 @@ async def respond_to_friend_request(
             detail="Arkadaşlık isteği bulunamadı"
         )
     
+    # Eğer istek reddedildiyse, kaydı sil (tekrar istek gönderilebilsin)
+    if response.status == "rejected":
+        db.delete(friendship)
+        db.commit()
+        return {"message": "Arkadaşlık isteği reddedildi"}
+    
+    # Eğer istek kabul edildiyse, sadece durumu güncelle (tek yönlü takip)
     friendship.status = response.status
     db.commit()
     db.refresh(friendship)
@@ -132,77 +176,85 @@ async def respond_to_friend_request(
 
 
 @router.get("/friends", response_model=List[UserResponse])
-async def get_friends(token: str, db: Session = Depends(get_db)):
+async def get_following(
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
     """
-    Kullanıcının arkadaş listesini döndürür (kabul edilmiş arkadaşlıklar).
+    Kullanıcının bağlantılarını döndürür:
+    - Benim takip ettiklerim
+    - Beni takip edenler
+    Her iki yönden de kabul edilmiş ilişkileri içerir.
     """
-    user_id = await get_current_user_id(token, db)
+    user_id = await get_current_user_id(authorization, db)
     
-    # Kullanıcının hem gönderdiği hem aldığı kabul edilmiş arkadaşlıkları bul
-    friendships = db.query(Friendship).filter(
-        or_(
-            Friendship.user_id == user_id,
-            Friendship.friend_id == user_id
-        ),
+    # Benim takip ettiklerim
+    following_ids = db.query(Friendship.friend_id).filter(
+        Friendship.user_id == user_id,
         Friendship.status == "accepted"
     ).all()
+    following_ids = [f[0] for f in following_ids]
     
-    # Arkadaş ID'lerini topla
-    friend_ids = []
-    for friendship in friendships:
-        if friendship.user_id == user_id:
-            friend_ids.append(friendship.friend_id)
-        else:
-            friend_ids.append(friendship.user_id)
+    # Beni takip edenler
+    follower_ids = db.query(Friendship.user_id).filter(
+        Friendship.friend_id == user_id,
+        Friendship.status == "accepted"
+    ).all()
+    follower_ids = [f[0] for f in follower_ids]
     
-    # Arkadaşları getir
+    # Her iki listeden unique ID'leri birleştir
+    friend_ids = list(set(following_ids + follower_ids))
+    
+    if not friend_ids:
+        return []
+    
+    # Kullanıcıları getir
     friends = db.query(User).filter(User.id.in_(friend_ids)).all()
     
     return friends
 
 
 @router.delete("/friends/{friend_id}")
-async def remove_friend(
+async def unfollow_user(
     friend_id: int,
-    token: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
 ):
     """
-    Arkadaşlığı sonlandırır.
+    Takipten çıkar (Instagram mantığı - sadece kendi takibini kaldırabilirsin).
     """
-    user_id = await get_current_user_id(token, db)
+    user_id = await get_current_user_id(authorization, db)
     
+    # Sadece kullanıcının kendi gönderdiği takibi bul
     friendship = db.query(Friendship).filter(
-        or_(
-            and_(Friendship.user_id == user_id, Friendship.friend_id == friend_id),
-            and_(Friendship.user_id == friend_id, Friendship.friend_id == user_id)
-        ),
+        Friendship.user_id == user_id,
+        Friendship.friend_id == friend_id,
         Friendship.status == "accepted"
     ).first()
     
     if not friendship:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Arkadaşlık bulunamadı"
+            detail="Bu kullanıcıyı takip etmiyorsunuz"
         )
     
     db.delete(friendship)
     db.commit()
     
-    return {"message": "Arkadaşlık başarıyla sonlandırıldı"}
+    return {"message": "Takipten çıktınız"}
 
 
 @router.get("/compatibility/{friend_id}", response_model=CompatibilityScore)
 async def get_compatibility_score(
     friend_id: int,
-    token: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
 ):
     """
     İki kullanıcı arasındaki uyum skorunu hesaplar.
     Ortak izlenen filmlerin yüzdesini döndürür.
     """
-    user_id = await get_current_user_id(token, db)
+    user_id = await get_current_user_id(authorization, db)
     
     # Arkadaş var mı kontrol et
     friend = db.query(User).filter(User.id == friend_id).first()
@@ -244,14 +296,14 @@ async def get_compatibility_score(
 
 @router.get("/feed", response_model=List[FeedItem])
 async def get_social_feed(
-    token: str,
     limit: int = 20,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
 ):
     """
     Arkadaşların son eklediği filmleri döndürür (sosyal akış).
     """
-    user_id = await get_current_user_id(token, db)
+    user_id = await get_current_user_id(authorization, db)
     
     # Arkadaşları bul
     friendships = db.query(Friendship).filter(

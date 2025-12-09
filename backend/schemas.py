@@ -27,6 +27,14 @@ class UserResponse(UserBase):
         from_attributes = True
 
 
+class UserUpdate(BaseModel):
+    """Kullanıcı güncelleme için schema"""
+    username: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
 class UserStats(BaseModel):
     """Kullanıcı istatistikleri"""
     total_movies: int
@@ -59,7 +67,9 @@ class FilmCreate(FilmBase):
     """Film ekleme için schema"""
     kisisel_puan: Optional[float] = Field(None, ge=0, le=10)
     kisisel_yorum: Optional[str] = None
-    izlendi: bool = True
+    izlendi: bool = False
+    is_favorite: bool = False
+    is_watchlist: bool = False
 
 
 class FilmUpdate(BaseModel):
@@ -67,6 +77,8 @@ class FilmUpdate(BaseModel):
     kisisel_puan: Optional[float] = Field(None, ge=0, le=10)
     kisisel_yorum: Optional[str] = None
     izlendi: Optional[bool] = None
+    is_favorite: Optional[bool] = None
+    is_watchlist: Optional[bool] = None
 
 
 class FilmResponse(FilmBase):
@@ -76,6 +88,8 @@ class FilmResponse(FilmBase):
     kisisel_puan: Optional[float] = None
     kisisel_yorum: Optional[str] = None
     izlendi: bool
+    is_favorite: bool
+    is_watchlist: bool
     izlenme_tarihi: datetime
     
     class Config:
@@ -105,6 +119,19 @@ class FriendshipResponse(BaseModel):
 class FriendshipUpdate(BaseModel):
     """Arkadaşlık durumu güncelleme"""
     status: str = Field(..., pattern="^(accepted|rejected)$")
+
+
+class FriendshipWithUser(BaseModel):
+    """Kullanıcı bilgisiyle birlikte arkadaşlık isteği"""
+    id: int
+    user_id: int
+    friend_id: int
+    status: str
+    created_at: datetime
+    user: UserResponse  # İsteği gönderen kullanıcı
+    
+    class Config:
+        from_attributes = True
 
 
 # ==================== AUTH SCHEMAS ====================
