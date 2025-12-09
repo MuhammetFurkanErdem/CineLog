@@ -57,6 +57,67 @@ async def search_movies(query: str, page: int = 1):
         return data.get("results", [])
 
 
+@router.get("/popular", response_model=List[TMDBMovieSearch])
+async def get_popular_movies(page: int = 1):
+    """
+    TMDB API'den popüler filmleri getirir.
+    """
+    if not settings.tmdb_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="TMDB API anahtarı yapılandırılmamış"
+        )
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{settings.tmdb_base_url}/movie/popular",
+            params={
+                "api_key": settings.tmdb_api_key,
+                "page": page,
+                "language": "tr-TR"
+            }
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="TMDB API'den popüler filmler alınamadı"
+            )
+        
+        data = response.json()
+        return data.get("results", [])
+
+
+@router.get("/trending", response_model=List[TMDBMovieSearch])
+async def get_trending_movies():
+    """
+    TMDB API'den haftalık trend filmleri getirir.
+    """
+    if not settings.tmdb_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="TMDB API anahtarı yapılandırılmamış"
+        )
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{settings.tmdb_base_url}/trending/movie/week",
+            params={
+                "api_key": settings.tmdb_api_key,
+                "language": "tr-TR"
+            }
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="TMDB API'den trend filmler alınamadı"
+            )
+        
+        data = response.json()
+        return data.get("results", [])
+
+
 @router.get("/{tmdb_id}", response_model=TMDBMovieSearch)
 async def get_movie_details(tmdb_id: int):
     """
