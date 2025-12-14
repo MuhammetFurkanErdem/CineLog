@@ -1,67 +1,79 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
-import { Search, Filter, Star, Clock, Tv, Loader2 } from "lucide-react";
-import { movieService } from "../../utils/api";
+import { Search, Filter, Star, Clock, Tv, Film, Loader2 } from "lucide-react";
+import { unifiedSearchAPI, UnifiedMedia } from "../../utils/api";
 
-interface Movie {
-  id: number;
-  title: string;
-  poster_path: string | null;
-  release_date: string;
-  overview: string;
-  vote_average: number;
-}
+type TabType = "movie" | "series" | "anime";
 
 export function Discover() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [movies, setMovies] = useState<Movie[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>("movie");
+  const [results, setResults] = useState<UnifiedMedia[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<"all" | "movies" | "series" | "anime">("all");
   const [sortBy, setSortBy] = useState<"popular" | "rating_high" | "rating_low">("popular");
 
-  // Sayfa yüklendiğinde popüler filmleri getir
+  // Fetch data based on activeTab and searchQuery
   useEffect(() => {
-    loadPopularMovies();
-  }, []);
-
-  const loadPopularMovies = async () => {
-    try {
-      setLoading(true);
+    const fetchData = async () => {
+      setIsLoading(true);
       setError(null);
-      const data = await movieService.getPopularMovies();
-      setMovies(data);
-    } catch (err: any) {
-      console.error("Error loading popular movies:", err);
-      setError("Filmler yüklenemedi");
-    } finally {
-      setLoading(false);
-    }
+
+      try {
+        let data: UnifiedMedia[] = [];
+
+        switch (activeTab) {
+          case "movie":
+            data = await unifiedSearchAPI.searchMovies(searchQuery);
+            break;
+          case "series":
+            data = await unifiedSearchAPI.searchSeries(searchQuery);
+            break;
+          case "anime":
+            data = await unifiedSearchAPI.searchAnime(searchQuery);
+            break;
+        }
+
+        setResults(data);
+      } catch (err: any) {
+        console.error("Error fetching data:", err);
+        setError("İçerik yüklenemedi. Lütfen tekrar deneyin.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Debounce search
+    const timer = setTimeout(() => {
+      fetchData();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeTab]);
+
+  // Sort results based on sortBy state
+  const sortedResults = [...results].sort((a, b) => {
+    if (sortBy === "rating_high") return b.rating - a.rating;
+    if (sortBy === "rating_low") return a.rating - b.rating;
+    return 0; // Popular (default API order)
+  });
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setResults([]); // Clear results when switching tabs
   };
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      loadPopularMovies();
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await movieService.searchMovies(searchQuery);
-      setMovies(data);
-    } catch (err: any) {
-      console.error("Error searching movies:", err);
-      setError("Arama yapılamadı");
-    } finally {
-      setLoading(false);
-    }
+  const handleClearSearch = () => {
+    setSearchQuery("");
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSearch();
-    }
+  const getTabConfig = (tab: TabType) => {
+    const configs = {
+      movie: { label: "Filmler", icon: Film },
+      series: { label: "Diziler", icon: Tv },
+      anime: { label: "Animeler", icon: Star },
+    };
+    return configs[tab];
   };
 
   return (
@@ -70,7 +82,7 @@ export function Discover() {
       <div>
         <h1 className="text-3xl text-white mb-2">Keşfet</h1>
         <p className="text-gray-400">
-          Film ve dizileri keşfet, puanla ve listenize ekleyin
+          Film, dizi ve anime keşfet, puanla ve listenize ekleyin
         </p>
       </div>
 
@@ -80,19 +92,15 @@ export function Discover() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Film veya dizi ara..."
+            placeholder={`${getTabConfig(activeTab).label} ara...`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
             className="w-full bg-slate-900/50 border border-purple-500/20 rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
           />
           {searchQuery && (
             <button
-              onClick={() => {
-                setSearchQuery("");
-                loadPopularMovies();
-              }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              onClick={handleClearSearch}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
             >
               ✕
             </button>
@@ -119,112 +127,108 @@ export function Discover() {
             </button>
           </div>
 
-          {/* Category Filters */}
-          <button 
-            onClick={() => setActiveFilter("all")}
-            className={`px-6 py-2.5 rounded-xl font-medium whitespace-nowrap transition-colors ${
-              activeFilter === "all" 
-                ? "bg-purple-500 text-white" 
-                : "bg-slate-800/50 text-gray-300 hover:bg-slate-700/50"
-            }`}
-          >
-            Tümü
-          </button>
-          <button 
-            onClick={() => setActiveFilter("movies")}
-            className={`px-6 py-2.5 rounded-xl font-medium whitespace-nowrap transition-colors ${
-              activeFilter === "movies" 
-                ? "bg-purple-500 text-white" 
-                : "bg-slate-800/50 text-gray-300 hover:bg-slate-700/50"
-            }`}
-          >
-            Filmler
-          </button>
-          <button 
-            onClick={() => setActiveFilter("series")}
-            className={`px-6 py-2.5 rounded-xl font-medium whitespace-nowrap transition-colors ${
-              activeFilter === "series" 
-                ? "bg-purple-500 text-white" 
-                : "bg-slate-800/50 text-gray-300 hover:bg-slate-700/50"
-            }`}
-          >
-            Diziler
-          </button>
-          <button 
-            onClick={() => setActiveFilter("anime")}
-            className={`px-6 py-2.5 rounded-xl font-medium whitespace-nowrap transition-colors ${
-              activeFilter === "anime" 
-                ? "bg-purple-500 text-white" 
-                : "bg-slate-800/50 text-gray-300 hover:bg-slate-700/50"
-            }`}
-          >
-            Animeler
-          </button>
+          {/* Category Tabs */}
+          {(["movie", "series", "anime"] as TabType[]).map((tab) => {
+            const config = getTabConfig(tab);
+            const Icon = config.icon;
+            return (
+              <button
+                key={tab}
+                onClick={() => handleTabChange(tab)}
+                className={`px-6 py-2.5 rounded-xl font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
+                  activeTab === tab
+                    ? "bg-purple-500 text-white shadow-lg shadow-purple-500/30"
+                    : "bg-slate-800/50 text-gray-300 hover:bg-slate-700/50"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {config.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Loading */}
-      {loading && (
+      {isLoading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+          <span className="ml-3 text-gray-400">Yükleniyor...</span>
         </div>
       )}
 
       {/* Error */}
-      {error && (
+      {error && !isLoading && (
         <div className="text-center py-12">
           <p className="text-red-400">{error}</p>
         </div>
       )}
 
-      {/* Movies Grid */}
-      {!loading && !error && (
+      {/* Results Grid - Unified Design for All Types */}
+      {!isLoading && !error && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {movies
-            .sort((a, b) => {
-              if (sortBy === "rating_high") return b.vote_average - a.vote_average;
-              if (sortBy === "rating_low") return a.vote_average - b.vote_average;
-              return 0; // popular (default TMDB order)
-            })
-            .map((movie) => (
+          {sortedResults.map((item) => (
             <Link
-              key={movie.id}
-              to={`/movie/${movie.id}`}
+              key={item.id}
+              to={
+                item.type === "movie"
+                  ? `/movie/${item.id}`
+                  : item.type === "series"
+                  ? `/series/${item.id}`
+                  : `/anime/${item.id}`
+              }
               className="group"
             >
               <div className="relative overflow-hidden rounded-xl bg-slate-900/50 border border-purple-500/10 hover:border-purple-500/30 transition-all hover:scale-105 duration-300">
                 {/* Poster */}
                 <div className="aspect-[2/3] overflow-hidden bg-slate-800/50">
-                  {movie.poster_path ? (
+                  {item.posterUrl && item.posterUrl !== "/placeholder-movie.png" ? (
                     <img
-                      src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
-                      alt={movie.title}
+                      src={item.posterUrl}
+                      alt={item.title}
                       className="w-full h-full object-cover"
+                      loading="lazy"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-500">
-                      <Clock className="w-12 h-12" />
+                      {item.type === "movie" && <Film className="w-12 h-12" />}
+                      {item.type === "series" && <Tv className="w-12 h-12" />}
+                      {item.type === "anime" && <Star className="w-12 h-12" />}
                     </div>
                   )}
                 </div>
 
                 {/* Rating Badge */}
-                <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1">
-                  <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                  <span className="text-xs text-yellow-400 font-semibold">
-                    {movie.vote_average ? movie.vote_average.toFixed(1) : "N/A"}
+                {item.rating > 0 && (
+                  <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1">
+                    <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                    <span className="text-xs text-yellow-400 font-semibold">
+                      {item.rating.toFixed(1)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Type Badge */}
+                <div className="absolute top-2 left-2 bg-purple-500/90 backdrop-blur-sm px-2 py-1 rounded-lg">
+                  <span className="text-xs text-white font-semibold uppercase">
+                    {item.type === "movie" && "Film"}
+                    {item.type === "series" && "Dizi"}
+                    {item.type === "anime" && "Anime"}
                   </span>
                 </div>
 
                 {/* Info */}
                 <div className="p-3">
-                  <h3 className="text-white mb-1 line-clamp-2 group-hover:text-purple-400 transition-colors font-medium">
-                    {movie.title}
+                  <h3 className="text-white mb-1 line-clamp-2 group-hover:text-purple-400 transition-colors font-medium leading-tight">
+                    {item.title}
                   </h3>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">
-                      {movie.release_date ? new Date(movie.release_date).getFullYear() : "N/A"}
-                    </span>
+                    <span className="text-gray-400">{item.year}</span>
+                    {item.episodes && item.episodes > 0 && (
+                      <span className="text-gray-500 text-xs">
+                        {item.episodes} ep
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -233,9 +237,16 @@ export function Discover() {
         </div>
       )}
 
-      {!loading && !error && movies.length === 0 && (
+      {/* Empty State */}
+      {!isLoading && !error && sortedResults.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-gray-400">Sonuç bulunamadı</p>
+          <Clock className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-400 text-lg mb-2">Sonuç bulunamadı</p>
+          <p className="text-gray-500 text-sm">
+            {searchQuery 
+              ? "Farklı anahtar kelimeler deneyin" 
+              : `${getTabConfig(activeTab).label} aramak için yukarıdaki arama kutusunu kullanın`}
+          </p>
         </div>
       )}
     </div>

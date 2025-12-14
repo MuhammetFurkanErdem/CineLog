@@ -150,7 +150,7 @@ export function Home() {
           <div className="text-3xl mb-2 text-blue-400">
             {stats.total_reviews}
           </div>
-          <div className="text-gray-400 text-sm">İnceleme</div>
+          <div className="text-gray-400 text-sm">Yorumlarım</div>
         </div>
         <div className="bg-slate-900/50 backdrop-blur rounded-xl p-4 border border-purple-500/10">
           <div className="text-3xl mb-2 text-green-400">

@@ -145,7 +145,7 @@ async def respond_to_friend_request(
 ):
     """
     Arkadaşlık isteğini kabul eder veya reddeder.
-    Instagram mantığı: Kabul edilince tek yönlü takip oluşur.
+    MUTUAL FRIENDSHIP (Facebook-style): Kabul edilince çift yönlü arkadaşlık oluşur.
     Reddedilince kayıt silinir, böylece tekrar istek gönderilebilir.
     """
     user_id = await get_current_user_id(authorization, db)
@@ -167,8 +167,25 @@ async def respond_to_friend_request(
         db.commit()
         return {"message": "Arkadaşlık isteği reddedildi"}
     
-    # Eğer istek kabul edildiyse, sadece durumu güncelle (tek yönlü takip)
-    friendship.status = response.status
+    # Eğer istek kabul edildiyse, çift yönlü arkadaşlık oluştur (MUTUAL)
+    friendship.status = "accepted"
+    
+    # Ters yönde de bir Friendship kaydı oluştur (karşılıklı arkadaşlık için)
+    reverse_friendship = db.query(Friendship).filter(
+        Friendship.user_id == user_id,
+        Friendship.friend_id == friendship.user_id
+    ).first()
+    
+    if not reverse_friendship:
+        reverse_friendship = Friendship(
+            user_id=user_id,
+            friend_id=friendship.user_id,
+            status="accepted"
+        )
+        db.add(reverse_friendship)
+    else:
+        reverse_friendship.status = "accepted"
+    
     db.commit()
     db.refresh(friendship)
     
@@ -221,27 +238,32 @@ async def unfollow_user(
     authorization: Optional[str] = Header(None)
 ):
     """
-    Takipten çıkar (Instagram mantığı - sadece kendi takibini kaldırabilirsin).
+    Arkadaşlıktan çıkar (MUTUAL FRIENDSHIP - her iki yönden de ilişki kaldırılır).
     """
     user_id = await get_current_user_id(authorization, db)
     
-    # Sadece kullanıcının kendi gönderdiği takibi bul
-    friendship = db.query(Friendship).filter(
-        Friendship.user_id == user_id,
-        Friendship.friend_id == friend_id,
+    # Her iki yönden de friendship kayıtlarını bul ve sil
+    friendships = db.query(Friendship).filter(
+        or_(
+            and_(Friendship.user_id == user_id, Friendship.friend_id == friend_id),
+            and_(Friendship.user_id == friend_id, Friendship.friend_id == user_id)
+        ),
         Friendship.status == "accepted"
-    ).first()
+    ).all()
     
-    if not friendship:
+    if not friendships:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bu kullanıcıyı takip etmiyorsunuz"
+            detail="Bu kullanıcıyla arkadaş değilsiniz"
         )
     
-    db.delete(friendship)
+    # Her iki kaydı da sil (mutual friendship kaldırma)
+    for friendship in friendships:
+        db.delete(friendship)
+    
     db.commit()
     
-    return {"message": "Takipten çıktınız"}
+    return {"message": "Arkadaşlıktan çıkıldı"}
 
 
 @router.get("/compatibility/{friend_id}", response_model=CompatibilityScore)

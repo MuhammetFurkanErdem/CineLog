@@ -2,6 +2,17 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { UserPlus, UserCheck, UserX, Search, Sparkles, Check, X } from "lucide-react";
 import { userService, socialService } from "../../utils/api";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 
 interface User {
   id: number;
@@ -47,8 +58,16 @@ export function Friends() {
   const [userStats, setUserStats] = useState<Record<number, UserStats>>({});
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
-
-  useEffect(() => {
+  const [unfollowDialog, setUnfollowDialog] = useState<{ open: boolean; userId: number | null; username: string }>({
+    open: false,
+    userId: null,
+    username: ""
+  });
+  const [followBackDialog, setFollowBackDialog] = useState<{ open: boolean; userId: number | null; username: string }>({
+    open: false,
+    userId: null,
+    username: ""
+  });  useEffect(() => {
     const fetchData = async () => {
       try {
         const [userResponse, statsResponse, friendsResponse, requestsResponse] = await Promise.all([
@@ -131,12 +150,12 @@ export function Friends() {
   const handleFollowUser = async (userId: number) => {
     try {
       await socialService.sendFriendRequest(userId);
-      alert("Arkadaşlık isteği gönderildi!");
+      toast.success("Arkadaşlık isteği gönderildi!");
       // Arama sonuçlarından kaldır
       setSearchResults(prev => prev.filter(u => u.id !== userId));
     } catch (error: any) {
       console.error("Arkadaşlık isteği gönderilemedi:", error);
-      alert(error.response?.data?.detail || "Bir hata oluştu");
+      toast.error(error.response?.data?.detail || "Bir hata oluştu");
     }
   };
 
@@ -167,7 +186,7 @@ export function Friends() {
         console.error("Stats yüklenemedi:", error);
       }
       
-      // Kendi stats'ımızı güncelle (takipçi sayısı değişti)
+      // Kendi stats'ımızı güncelle (MUTUAL: hem followers hem following +1)
       try {
         const updatedMyStats = await userService.getUserStats();
         setMyStats(updatedMyStats);
@@ -175,22 +194,12 @@ export function Friends() {
         console.error("Kendi stats güncellenemedi:", error);
       }
       
-      // Kullanıcıya geri takip seçeneği sun
-      if (confirm(`${username} artık seni takip ediyor. Sen de takip etmek ister misin?`)) {
-        await handleFollowUser(userId);
-        // Takip ettikten sonra stats'ı tekrar güncelle
-        try {
-          const updatedMyStats = await userService.getUserStats();
-          setMyStats(updatedMyStats);
-        } catch (error) {
-          console.error("Stats güncellenemedi:", error);
-        }
-      } else {
-        alert("Arkadaşlık isteği kabul edildi!");
-      }
+      // Başarı mesajı - MUTUAL arkadaşlık kuruldu
+      toast.success(`${username} ile artık arkadaşsınız!`);
+      
     } catch (error: any) {
       console.error("İstek kabul edilemedi:", error);
-      alert(error.response?.data?.detail || "Bir hata oluştu");
+      toast.error(error.response?.data?.detail || "Bir hata oluştu");
     }
   };
 
@@ -200,25 +209,27 @@ export function Friends() {
       // İstekleri yenile
       const requestsResponse = await socialService.getFriendRequests();
       setFriendRequests(requestsResponse);
-      alert("Arkadaşlık isteği reddedildi");
+      toast.success("Arkadaşlık isteği reddedildi");
     } catch (error: any) {
       console.error("İstek reddedilemedi:", error);
-      alert(error.response?.data?.detail || "Bir hata oluştu");
+      toast.error(error.response?.data?.detail || "Bir hata oluştu");
     }
   };
 
-  const handleUnfollow = async (userId: number) => {
-    if (!confirm("Takipten çıkmak istediğinize emin misiniz?")) {
-      return;
-    }
+  const handleUnfollow = (userId: number, username: string) => {
+    setUnfollowDialog({ open: true, userId, username });
+  };
+
+  const confirmUnfollow = async () => {
+    if (!unfollowDialog.userId) return;
 
     try {
-      await socialService.removeFriend(userId);
+      await socialService.removeFriend(unfollowDialog.userId);
       // Arkadaş listesini yenile
       const friendsResponse = await socialService.getFriends();
       setFriends(friendsResponse);
       
-      // Kendi stats'ımızı güncelle (takip ettiğim sayısı değişti)
+      // Kendi stats'ımızı güncelle (MUTUAL: hem followers hem following -1)
       try {
         const updatedMyStats = await userService.getUserStats();
         setMyStats(updatedMyStats);
@@ -226,10 +237,11 @@ export function Friends() {
         console.error("Stats güncellenemedi:", error);
       }
       
-      alert("Takipten çıktınız");
+      toast.success(`${unfollowDialog.username} ile arkadaşlığınız sona erdi`);
+      setUnfollowDialog({ open: false, userId: null, username: "" });
     } catch (error: any) {
-      console.error("Takipten çıkılamadı:", error);
-      alert(error.response?.data?.detail || "Bir hata oluştu");
+      console.error("Arkadaşlıktan çıkılamadı:", error);
+      toast.error(error.response?.data?.detail || "Bir hata oluştu");
     }
   };
 
@@ -274,13 +286,13 @@ export function Friends() {
           <div className="text-4xl mb-2 text-purple-400">
             {myStats?.total_followers || 0}
           </div>
-          <div className="text-gray-300">Takipçi</div>
+          <div className="text-gray-300">Takip</div>
         </div>
         <div className="bg-gradient-to-br from-pink-900/40 to-pink-900/20 rounded-xl p-6 border border-pink-500/20">
           <div className="text-4xl mb-2 text-pink-400">
             {myStats?.total_following || 0}
           </div>
-          <div className="text-gray-300">Takip Edilen</div>
+          <div className="text-gray-300">Takipçi</div>
         </div>
       </div>
 
@@ -447,22 +459,22 @@ export function Friends() {
 
                 {/* Action Button */}
                 {isFriend ? (
-                  <button 
-                    onClick={() => handleUnfollow(user.id)}
+                  <button
+                    onClick={() => handleUnfollow(user.id, user.username)}
                     className="px-8 py-3.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-all flex items-center gap-2 flex-shrink-0"
                   >
                     <UserCheck className="w-5 h-5" />
-                    <span className="hidden md:inline">Takip Ediliyor</span>
-                    <span className="md:hidden">Takipte</span>
+                    <span className="hidden md:inline">Arkadaşsınız</span>
+                    <span className="md:hidden">Arkadaş</span>
                   </button>
                 ) : (
-                  <button 
+                  <button
                     onClick={() => handleFollowUser(user.id)}
                     className="px-8 py-3.5 bg-purple-500 hover:bg-purple-600 text-white rounded-xl transition-all flex items-center gap-2 flex-shrink-0 shadow-lg hover:shadow-purple-500/50 hover:scale-105"
                   >
                     <UserPlus className="w-5 h-5" />
-                    <span className="hidden md:inline">Takip Et</span>
-                    <span className="md:hidden">Takip</span>
+                    <span className="hidden md:inline">Arkadaş Ekle</span>
+                    <span className="md:hidden">Ekle</span>
                   </button>
                 )}
               </div>
@@ -478,6 +490,27 @@ export function Friends() {
           </p>
         </div>
       )}
+
+      {/* Remove Friend Confirmation Dialog */}
+      <AlertDialog open={unfollowDialog.open} onOpenChange={(open: boolean) => setUnfollowDialog({ open, userId: null, username: "" })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Arkadaşlıktan Çıkar?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{unfollowDialog.username}</strong> kullanıcısını arkadaş listenden kaldırmak üzeresiniz. Bu işlemden sonra tekrar arkadaşlık isteği gönderebilirsiniz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmUnfollow}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              Arkadaşlıktan Çıkar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

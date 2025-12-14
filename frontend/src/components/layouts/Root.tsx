@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from "react-router";
 import { Home, Compass, User, Users, BarChart3 } from "lucide-react";
+import { Toaster } from "../ui/sonner";
 
 export function Root() {
   const location = useLocation();
@@ -80,6 +81,9 @@ export function Root() {
           })}
         </div>
       </nav>
+
+      {/* Toast Notifications */}
+      <Toaster richColors position="top-right" />
     </div>
   );
 }
