@@ -56,8 +56,8 @@ export interface Activity {
 
 export const currentUser: User = {
   id: "user-1",
-  name: "Ayşe Yılmaz",
-  username: "ayse_cinephile",
+  name: "Furkan Erdem",
+  username: "furkanerdem",
   avatar: "https://images.unsplash.com/photo-1529995049601-ef63465a463f?w=200&h=200&fit=crop",
   bio: "Film tutkunu 🎬 | Retro sinemanın hayranı | Haftada 5+ film",
   stats: {

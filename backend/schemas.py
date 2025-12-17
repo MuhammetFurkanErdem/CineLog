@@ -27,11 +27,29 @@ class UserResponse(UserBase):
         from_attributes = True
 
 
+class UserUpdate(BaseModel):
+    """Kullanıcı güncelleme için schema"""
+    username: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
 class UserStats(BaseModel):
     """Kullanıcı istatistikleri"""
-    total_films: int
+    total_movies: int
+    total_series: int
     average_rating: Optional[float] = None
-    total_friends: int
+    total_watch_time: int  # Dakika cinsinden
+    total_reviews: int
+    total_followers: int
+    total_following: int
+    movies_this_month: int
+    movies_this_year: int
+    series_watching: int
+    series_completed: int
+    total_watch_hours: int  # Saat cinsinden
+    badges: list = []
 
 
 # ==================== FILM SCHEMAS ====================
@@ -49,7 +67,9 @@ class FilmCreate(FilmBase):
     """Film ekleme için schema"""
     kisisel_puan: Optional[float] = Field(None, ge=0, le=10)
     kisisel_yorum: Optional[str] = None
-    izlendi: bool = True
+    izlendi: bool = False
+    is_favorite: bool = False
+    is_watchlist: bool = False
 
 
 class FilmUpdate(BaseModel):
@@ -57,6 +77,8 @@ class FilmUpdate(BaseModel):
     kisisel_puan: Optional[float] = Field(None, ge=0, le=10)
     kisisel_yorum: Optional[str] = None
     izlendi: Optional[bool] = None
+    is_favorite: Optional[bool] = None
+    is_watchlist: Optional[bool] = None
 
 
 class FilmResponse(FilmBase):
@@ -66,6 +88,8 @@ class FilmResponse(FilmBase):
     kisisel_puan: Optional[float] = None
     kisisel_yorum: Optional[str] = None
     izlendi: bool
+    is_favorite: bool
+    is_watchlist: bool
     izlenme_tarihi: datetime
     
     class Config:
@@ -97,6 +121,19 @@ class FriendshipUpdate(BaseModel):
     status: str = Field(..., pattern="^(accepted|rejected)$")
 
 
+class FriendshipWithUser(BaseModel):
+    """Kullanıcı bilgisiyle birlikte arkadaşlık isteği"""
+    id: int
+    user_id: int
+    friend_id: int
+    status: str
+    created_at: datetime
+    user: UserResponse  # İsteği gönderen kullanıcı
+    
+    class Config:
+        from_attributes = True
+
+
 # ==================== AUTH SCHEMAS ====================
 
 class Token(BaseModel):
@@ -114,6 +151,32 @@ class TokenData(BaseModel):
 class GoogleAuthRequest(BaseModel):
     """Google OAuth için gelen token"""
     token: str
+
+
+class RegisterRequest(BaseModel):
+    """Kullanıcı kayıt isteği"""
+    username: str = Field(..., min_length=3, max_length=30)
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+
+
+class LoginRequest(BaseModel):
+    """Kullanıcı giriş isteği"""
+    username: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    """Giriş/Kayıt başarılı response"""
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class UsernameCheckResponse(BaseModel):
+    """Kullanıcı adı müsaitlik kontrolü"""
+    available: bool
+    message: str
 
 
 # ==================== SOCIAL SCHEMAS ====================
@@ -150,3 +213,50 @@ class MovieRecommendation(BaseModel):
     """Film önerisi"""
     source_film: TMDBMovieSearch
     recommended_film: TMDBMovieSearch
+
+
+# ==================== ACTIVITY SCHEMAS ====================
+
+class ActivityLikeCreate(BaseModel):
+    """Aktivite beğeni oluşturma"""
+    film_id: int
+
+
+class ActivityLikeResponse(BaseModel):
+    """Aktivite beğeni response"""
+    id: int
+    user_id: int
+    film_id: int
+    created_at: datetime
+    user: UserResponse
+    
+    class Config:
+        from_attributes = True
+
+
+class ActivityCommentCreate(BaseModel):
+    """Aktivite yorum oluşturma"""
+    film_id: int
+    content: str
+
+
+class ActivityCommentResponse(BaseModel):
+    """Aktivite yorum response"""
+    id: int
+    user_id: int
+    film_id: int
+    content: str
+    created_at: datetime
+    user: UserResponse
+    
+    class Config:
+        from_attributes = True
+
+
+class ActivityLikesAndComments(BaseModel):
+    """Bir aktivitenin beğeni ve yorum sayıları"""
+    like_count: int
+    comment_count: int
+    is_liked_by_me: bool
+    likes: list[ActivityLikeResponse] = []
+    comments: list[ActivityCommentResponse] = []

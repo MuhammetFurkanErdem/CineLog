@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import httpx
 import random
 
@@ -13,9 +13,17 @@ router = APIRouter()
 settings = get_settings()
 
 
-async def get_current_user_id(token: str, db: Session = Depends(get_db)) -> int:
-    """Token'dan kullanıcı ID'sini döndürür (authentication için)"""
+async def get_current_user_id(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> int:
+    """Authorization header'dan token'ı alır ve kullanıcı ID'sini döndürür"""
     from routers.auth import verify_token
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token bulunamadı"
+        )
+    
+    token = authorization.replace("Bearer ", "")
     user_id = verify_token(token)
     if not user_id:
         raise HTTPException(
@@ -57,10 +65,10 @@ async def search_movies(query: str, page: int = 1):
         return data.get("results", [])
 
 
-@router.get("/{tmdb_id}", response_model=TMDBMovieSearch)
-async def get_movie_details(tmdb_id: int):
+@router.get("/popular", response_model=List[TMDBMovieSearch])
+async def get_popular_movies(page: int = 1):
     """
-    TMDB API'den film detaylarını getirir.
+    TMDB API'den popüler filmleri getirir.
     """
     if not settings.tmdb_api_key:
         raise HTTPException(
@@ -70,6 +78,69 @@ async def get_movie_details(tmdb_id: int):
     
     async with httpx.AsyncClient() as client:
         response = await client.get(
+            f"{settings.tmdb_base_url}/movie/popular",
+            params={
+                "api_key": settings.tmdb_api_key,
+                "page": page,
+                "language": "tr-TR"
+            }
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="TMDB API'den popüler filmler alınamadı"
+            )
+        
+        data = response.json()
+        return data.get("results", [])
+
+
+@router.get("/trending", response_model=List[TMDBMovieSearch])
+async def get_trending_movies():
+    """
+    TMDB API'den haftalık trend filmleri getirir.
+    """
+    if not settings.tmdb_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="TMDB API anahtarı yapılandırılmamış"
+        )
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{settings.tmdb_base_url}/trending/movie/week",
+            params={
+                "api_key": settings.tmdb_api_key,
+                "language": "tr-TR"
+            }
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="TMDB API'den trend filmler alınamadı"
+            )
+        
+        data = response.json()
+        return data.get("results", [])
+
+
+@router.get("/tmdb/{tmdb_id}")
+async def get_movie_details(tmdb_id: int):
+    """
+    TMDB API'den film detaylarını getirir.
+    Credits (cast, crew) ve watch providers dahil.
+    """
+    if not settings.tmdb_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="TMDB API anahtarı yapılandırılmamış"
+        )
+    
+    async with httpx.AsyncClient() as client:
+        # Film detaylarını al
+        movie_response = await client.get(
             f"{settings.tmdb_base_url}/movie/{tmdb_id}",
             params={
                 "api_key": settings.tmdb_api_key,
@@ -77,32 +148,71 @@ async def get_movie_details(tmdb_id: int):
             }
         )
         
-        if response.status_code == 404:
+        if movie_response.status_code == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Film bulunamadı"
             )
         
-        if response.status_code != 200:
+        if movie_response.status_code != 200:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="TMDB API'den film bilgisi alınamadı"
             )
         
-        return response.json()
+        movie_data = movie_response.json()
+        
+        # Credits (oyuncular ve ekip) bilgisini al
+        credits_response = await client.get(
+            f"{settings.tmdb_base_url}/movie/{tmdb_id}/credits",
+            params={
+                "api_key": settings.tmdb_api_key,
+                "language": "tr-TR"
+            }
+        )
+        
+        # Watch providers (nerede izlenir) bilgisini al
+        providers_response = await client.get(
+            f"{settings.tmdb_base_url}/movie/{tmdb_id}/watch/providers",
+            params={
+                "api_key": settings.tmdb_api_key
+            }
+        )
+        
+        # Credits verilerini ekle
+        if credits_response.status_code == 200:
+            credits_data = credits_response.json()
+            movie_data["cast"] = credits_data.get("cast", [])[:10]  # İlk 10 oyuncu
+            movie_data["crew"] = credits_data.get("crew", [])
+            
+            # Yönetmeni bul
+            directors = [crew for crew in movie_data["crew"] if crew.get("job") == "Director"]
+            movie_data["director"] = directors[0] if directors else None
+        
+        # Watch providers verilerini ekle (Türkiye için)
+        if providers_response.status_code == 200:
+            providers_data = providers_response.json()
+            tr_providers = providers_data.get("results", {}).get("TR", {})
+            movie_data["watch_providers"] = {
+                "flatrate": tr_providers.get("flatrate", []),  # Netflix, Disney+ vb.
+                "buy": tr_providers.get("buy", []),
+                "rent": tr_providers.get("rent", [])
+            }
+        else:
+            movie_data["watch_providers"] = {"flatrate": [], "buy": [], "rent": []}
+        
+        return movie_data
 
 
 @router.post("/add", response_model=FilmResponse)
 async def add_film_to_list(
     film_data: FilmCreate,
-    token: str,
-    db: Session = Depends(get_db)
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
 ):
     """
     Kullanıcının listesine film ekler.
     """
-    user_id = await get_current_user_id(token, db)
-    
     # Kullanıcı bu filmi daha önce eklediyse hata ver
     existing_film = db.query(Film).filter(
         Film.user_id == user_id,
@@ -125,7 +235,9 @@ async def add_film_to_list(
         overview=film_data.overview,
         kisisel_puan=film_data.kisisel_puan,
         kisisel_yorum=film_data.kisisel_yorum,
-        izlendi=film_data.izlendi
+        izlendi=film_data.izlendi,
+        is_favorite=film_data.is_favorite,
+        is_watchlist=film_data.is_watchlist
     )
     
     db.add(new_film)
@@ -136,87 +248,25 @@ async def add_film_to_list(
 
 
 @router.get("/my-list", response_model=List[FilmResponse])
-async def get_my_films(token: str, db: Session = Depends(get_db)):
+async def get_my_films(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
     """
-    Kullanıcının film listesini döndürür.
+    Kullanıcının film listesini getirir.
     """
-    user_id = await get_current_user_id(token, db)
     films = db.query(Film).filter(Film.user_id == user_id).all()
     return films
 
 
-@router.put("/{film_id}", response_model=FilmResponse)
-async def update_film(
-    film_id: int,
-    film_data: FilmUpdate,
-    token: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Kullanıcının listesindeki bir filmi günceller.
-    """
-    user_id = await get_current_user_id(token, db)
-    
-    film = db.query(Film).filter(
-        Film.id == film_id,
-        Film.user_id == user_id
-    ).first()
-    
-    if not film:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Film bulunamadı"
-        )
-    
-    # Güncelleme
-    if film_data.kisisel_puan is not None:
-        film.kisisel_puan = film_data.kisisel_puan
-    if film_data.kisisel_yorum is not None:
-        film.kisisel_yorum = film_data.kisisel_yorum
-    if film_data.izlendi is not None:
-        film.izlendi = film_data.izlendi
-    
-    db.commit()
-    db.refresh(film)
-    
-    return film
-
-
-@router.delete("/{film_id}")
-async def delete_film(
-    film_id: int,
-    token: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Kullanıcının listesinden bir filmi siler.
-    """
-    user_id = await get_current_user_id(token, db)
-    
-    film = db.query(Film).filter(
-        Film.id == film_id,
-        Film.user_id == user_id
-    ).first()
-    
-    if not film:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Film bulunamadı"
-        )
-    
-    db.delete(film)
-    db.commit()
-    
-    return {"message": "Film başarıyla silindi"}
-
-
 @router.get("/recommend/random", response_model=MovieRecommendation)
-async def get_random_recommendation(token: str, db: Session = Depends(get_db)):
+async def get_random_recommendation(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
     """
     Kullanıcının listesinden rastgele bir film seçer ve TMDB'den benzer film önerir.
     """
-    user_id = await get_current_user_id(token, db)
-    
     # Kullanıcının filmlerini al
     user_films = db.query(Film).filter(Film.user_id == user_id).all()
     
@@ -248,29 +298,143 @@ async def get_random_recommendation(token: str, db: Session = Depends(get_db)):
         
         if response.status_code != 200:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="TMDB API'den benzer filmler alınamadı"
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="TMDB API yanıt vermedi"
             )
-        
-        similar_movies = response.json().get("results", [])
-        
-        if not similar_movies:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Benzer film bulunamadı"
-            )
-        
-        # Rastgele bir benzer film seç
-        recommended = random.choice(similar_movies)
-        
-        return {
-            "source_film": {
-                "id": source_film.tmdb_id,
-                "title": source_film.title,
-                "poster_path": source_film.poster_path,
-                "release_date": source_film.release_date,
-                "overview": source_film.overview,
-                "vote_average": None
-            },
-            "recommended_film": recommended
-        }
+    
+    data = response.json()
+    results = data.get("results", [])
+    
+    if not results:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benzer film bulunamadı"
+        )
+    
+    # İlk sonucu öneri olarak döndür
+    recommendation = results[0]
+    
+    return MovieRecommendation(
+        source_film_id=source_film.id,
+        source_film_title=source_film.title,
+        recommended_tmdb_id=recommendation.get("id"),
+        recommended_title=recommendation.get("title"),
+        overview=recommendation.get("overview"),
+        poster_path=recommendation.get("poster_path"),
+        release_date=recommendation.get("release_date")
+    )
+
+
+@router.put("/{film_id}", response_model=FilmResponse)
+async def update_film(
+    film_id: int,
+    film_data: FilmUpdate,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Kullanıcının listesindeki bir filmi günceller.
+    """
+    film = db.query(Film).filter(Film.id == film_id, Film.user_id == user_id).first()
+    
+    if not film:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Film bulunamadı"
+        )
+    
+    # Güncelleme verilerini uygula
+    update_data = film_data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(film, key, value)
+    
+    db.commit()
+    db.refresh(film)
+    
+    return film
+
+
+@router.delete("/{film_id}")
+async def delete_film(
+    film_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Kullanıcının listesinden bir filmi siler.
+    """
+    film = db.query(Film).filter(Film.id == film_id, Film.user_id == user_id).first()
+    
+    if not film:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Film bulunamadı"
+        )
+    
+    db.delete(film)
+    db.commit()
+    
+    return {"message": "Film başarıyla silindi"}
+
+
+@router.get("/my-genres")
+async def get_my_genre_stats(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Kullanıcının izlediği filmlerin tür istatistiklerini döndürür.
+    TMDB'den her filmin türünü çeker ve sayar.
+    """
+    # Kullanıcının izlediği filmleri al
+    user_films = db.query(Film).filter(
+        Film.user_id == user_id,
+        Film.izlendi == True
+    ).all()
+    
+    if not user_films:
+        return {"genres": [], "total": 0}
+    
+    if not settings.tmdb_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="TMDB API anahtarı yapılandırılmamış"
+        )
+    
+    # Tür sayacı
+    genre_counts = {}
+    
+    async with httpx.AsyncClient() as client:
+        for film in user_films:
+            try:
+                response = await client.get(
+                    f"{settings.tmdb_base_url}/movie/{film.tmdb_id}",
+                    params={
+                        "api_key": settings.tmdb_api_key,
+                        "language": "tr-TR"
+                    }
+                )
+                
+                if response.status_code == 200:
+                    movie_data = response.json()
+                    genres = movie_data.get("genres", [])
+                    
+                    for genre in genres:
+                        genre_name = genre.get("name")
+                        if genre_name:
+                            genre_counts[genre_name] = genre_counts.get(genre_name, 0) + 1
+            except Exception:
+                # Hata olursa bu filmi atla
+                continue
+    
+    # Türleri sayıya göre sırala
+    sorted_genres = sorted(
+        [{"name": name, "count": count} for name, count in genre_counts.items()],
+        key=lambda x: x["count"],
+        reverse=True
+    )
+    
+    return {
+        "genres": sorted_genres[:5],  # En çok 5 tür döndür
+        "total": len(user_films)
+    }

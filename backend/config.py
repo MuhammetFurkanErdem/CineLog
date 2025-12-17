@@ -1,29 +1,55 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+import os
 
 
 class Settings(BaseSettings):
     """Uygulama ayarları - .env dosyasından yüklenir"""
     
-    # Veritabanı ayarları
-    database_url: str = "sqlite:///./cinelog.db"
+    # Database - Production'da PostgreSQL, development'ta SQLite
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./cinelog.db")
+    
+    @property
+    def processed_database_url(self) -> str:
+        """PostgreSQL URL düzeltmesi (Railway/Heroku için)"""
+        if self.database_url.startswith("postgres://"):
+            return self.database_url.replace("postgres://", "postgresql://", 1)
+        return self.database_url
     
     # JWT ayarları
-    secret_key: str = "your-secret-key-change-this-in-production"
+    secret_key: str = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
     # Google OAuth ayarları
-    google_client_id: str = ""
-    google_client_secret: str = ""
-    google_redirect_uri: str = "http://localhost:5174/callback"
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    google_redirect_uri: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5174/callback")
     
     # TMDB API ayarları
-    tmdb_api_key: str = ""
+    tmdb_api_key: str = os.getenv("TMDB_API_KEY", "")
     tmdb_base_url: str = "https://api.themoviedb.org/3"
     
-    # CORS ayarları
-    cors_origins: list = ["http://localhost:5174", "http://127.0.0.1:5174"]
+    # CORS ayarları - Production ve Development
+    cors_origins: list = [
+        "http://localhost:5173",
+        "http://localhost:5174", 
+        "http://localhost:5175",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        # Production domains
+        "https://furkanerdem.me",
+        "https://www.furkanerdem.me",
+        "https://cinelog.furkanerdem.me",
+    ]
+    
+    # Environment
+    environment: str = os.getenv("ENVIRONMENT", "development")
+    
+    @property
+    def is_production(self) -> bool:
+        return self.environment == "production"
     
     class Config:
         env_file = ".env"
