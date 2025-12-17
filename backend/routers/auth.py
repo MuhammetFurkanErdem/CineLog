@@ -9,8 +9,17 @@ import httpx
 
 from database import get_db
 from models import User
-from schemas import GoogleAuthRequest, Token, UserResponse
+from schemas import (
+    GoogleAuthRequest, 
+    Token, 
+    UserResponse,
+    RegisterRequest,
+    LoginRequest,
+    AuthResponse,
+    UsernameCheckResponse
+)
 from config import get_settings
+from utils.security import hash_password, verify_password, validate_password_strength
 
 router = APIRouter()
 settings = get_settings()
@@ -97,7 +106,8 @@ async def google_login(auth_data: GoogleAuthRequest, db: Session = Depends(get_d
     
     except ValueError as e:
         # Token geçersiz
-        print(f"Google token validation error: {str(e)}")
+        print(f"🔴 Google token validation error: {str(e)}")
+        print(f"🔑 Settings google_client_id: {settings.google_client_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Geçersiz Google token: {str(e)}"
@@ -159,3 +169,186 @@ async def logout():
     Çıkış yapar (Frontend'de token'ı silmek yeterli).
     """
     return {"message": "Başarıyla çıkış yapıldı"}
+
+
+# ==================== REGISTER / LOGIN ENDPOINTS ====================
+
+@router.post("/register", response_model=AuthResponse)
+async def register(
+    register_data: RegisterRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Yeni kullanıcı kaydı oluşturur.
+    """
+    # Username validasyonu
+    username = register_data.username.lower().strip()
+    
+    if not username.isalnum() and '_' not in username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kullanıcı adı sadece harf, rakam ve alt çizgi içerebilir"
+        )
+    
+    # Username müsaitlik kontrolü
+    existing_username = db.query(User).filter(User.username == username).first()
+    if existing_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu kullanıcı adı zaten kullanılıyor"
+        )
+    
+    # Email müsaitlik kontrolü
+    existing_email = db.query(User).filter(User.email == register_data.email).first()
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu email adresi zaten kullanılıyor"
+        )
+    
+    # Şifre gücü kontrolü
+    is_valid, message = validate_password_strength(register_data.password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message
+        )
+    
+    # Şifreyi hash'le
+    hashed_password = hash_password(register_data.password)
+    
+    # Yeni kullanıcı oluştur
+    new_user = User(
+        username=username,
+        email=register_data.email,
+        password_hash=hashed_password,
+        picture=f"https://api.dicebear.com/7.x/avataaars/svg?seed={username}"  # Default avatar
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # JWT token oluştur
+    access_token = create_access_token(
+        data={"sub": str(new_user.id), "email": new_user.email}
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": new_user
+    }
+
+
+@router.post("/login", response_model=AuthResponse)
+async def login(
+    login_data: LoginRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Kullanıcı adı ve şifre ile giriş yapar.
+    """
+    # Kullanıcıyı bul (username veya email ile)
+    user = db.query(User).filter(
+        (User.username == login_data.username.lower()) | 
+        (User.email == login_data.username.lower())
+    ).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Kullanıcı adı veya şifre hatalı"
+        )
+    
+    # Şifre kontrolü
+    if not user.password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bu hesap Google ile oluşturulmuş. Lütfen Google ile giriş yapın."
+        )
+    
+    if not verify_password(login_data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Kullanıcı adı veya şifre hatalı"
+        )
+    
+    # JWT token oluştur
+    access_token = create_access_token(
+        data={"sub": str(user.id), "email": user.email}
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
+
+
+@router.get("/check-username/{username}", response_model=UsernameCheckResponse)
+async def check_username(
+    username: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Kullanıcı adı müsaitlik kontrolü (real-time).
+    """
+    username = username.lower().strip()
+    
+    # Minimum uzunluk kontrolü
+    if len(username) < 3:
+        return {
+            "available": False,
+            "message": "Kullanıcı adı en az 3 karakter olmalıdır"
+        }
+    
+    # Maximum uzunluk kontrolü
+    if len(username) > 30:
+        return {
+            "available": False,
+            "message": "Kullanıcı adı en fazla 30 karakter olabilir"
+        }
+    
+    # Karakter kontrolü
+    if not all(c.isalnum() or c == '_' for c in username):
+        return {
+            "available": False,
+            "message": "Kullanıcı adı sadece harf, rakam ve alt çizgi içerebilir"
+        }
+    
+    # Veritabanında kontrol
+    existing = db.query(User).filter(User.username == username).first()
+    
+    if existing:
+        return {
+            "available": False,
+            "message": "Bu kullanıcı adı zaten kullanılıyor"
+        }
+    
+    return {
+        "available": True,
+        "message": "Kullanıcı adı müsait"
+    }
+
+
+@router.get("/check-email/{email}")
+async def check_email(
+    email: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Email müsaitlik kontrolü.
+    """
+    existing = db.query(User).filter(User.email == email.lower()).first()
+    
+    if existing:
+        return {
+            "available": False,
+            "message": "Bu email adresi zaten kullanılıyor"
+        }
+    
+    return {
+        "available": True,
+        "message": "Email adresi müsait"
+    }

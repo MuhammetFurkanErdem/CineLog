@@ -23,6 +23,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],  # Tüm HTTP metodlarına izin ver
     allow_headers=["*"],  # Tüm header'lara izin ver
+    max_age=3600,  # Preflight cache süresi
 )
 
 # Router'ları ekle

@@ -5,10 +5,15 @@ from config import get_settings
 
 settings = get_settings()
 
+# Production'da processed_database_url kullan (PostgreSQL URL düzeltmesi)
+database_url = settings.processed_database_url
+
 # Veritabanı motoru oluştur
 engine = create_engine(
-    settings.database_url,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+    database_url,
+    connect_args={"check_same_thread": False} if "sqlite" in database_url else {},
+    pool_pre_ping=True,  # PostgreSQL için connection check
+    pool_recycle=3600,   # PostgreSQL için connection recycle
 )
 
 # Session factory
@@ -35,5 +40,5 @@ def init_db():
     Veritabanı tablolarını oluşturur.
     Uygulama başlangıcında çağrılmalıdır.
     """
-    from models import User, Film, Friendship  # Import burada circular import önlemek için
+    from models import User, Film, Friendship, ActivityLike, ActivityComment  # Import burada circular import önlemek için
     Base.metadata.create_all(bind=engine)

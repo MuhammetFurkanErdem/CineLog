@@ -1,4 +1,4 @@
-import { Card, CardContent } from "../ui/Card";
+import { Card, CardContent } from "../ui/card";
 import {
   Carousel,
   CarouselContent,

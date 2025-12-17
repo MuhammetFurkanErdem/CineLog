@@ -1,7 +1,8 @@
-import { useParams, useNavigate } from "react-router";
-import { Settings, Film, Tv, Star, Award, Calendar, LogOut, X } from "lucide-react";
+import { useParams, useNavigate, Link } from "react-router";
+import { Settings, Film, Tv, Star, Award, Calendar, LogOut, X, ChevronLeft, ChevronRight, UserPlus, UserMinus, Users, Loader2 } from "lucide-react";
 import { useProfile } from "../../hooks/useProfile";
 import { useAuth } from "../../hooks/useAuth";
+import { useState, useEffect } from "react";
 import { getActivitiesByUserId, getMovieById, Badge, User } from "../../utils/mockData";
 import { toggleInteraction } from "../../utils/storage";
 
@@ -9,12 +10,20 @@ export function Profile() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const { logout } = useAuth();
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 18; // 3 satır x 6 sütun
 
   // All logic is handled by useProfile hook
   const {
     profileUser,
     isOwnProfile,
     isFriend,
+    isFollowing,
+    friendshipLoading,
+    handleFollow,
+    handleUnfollow,
     visibility,
     stats,
     activeTab,
@@ -23,8 +32,14 @@ export function Profile() {
     favoriteItems,
     watchlistItems,
     reviewItems,
+    calculatedBadges,
     refreshLibrary,
   } = useProfile({ userId });
+
+  // activeTab değişince page'i sıfırla
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
 
   // Handle edit profile
   const handleEdit = () => {
@@ -91,12 +106,17 @@ export function Profile() {
   };
 
   // Calculate current items based on active tab
-  const currentItems =
+  const allItems =
     activeTab === "watched" ? watchedItems :
     activeTab === "favorites" ? favoriteItems :
     activeTab === "watchlist" ? watchlistItems :
     activeTab === "reviews" ? reviewItems :
     [];
+
+  // Pagination
+  const totalPages = Math.ceil(allItems.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentItems = allItems.slice(startIndex, startIndex + itemsPerPage);
 
   // Calculate favorite genres from favorite items
   const favoriteGenres = (() => {
@@ -181,22 +201,58 @@ export function Profile() {
             </div>
           )}
           {!isOwnProfile && (
-            <button className="px-8 py-3.5 bg-purple-500 hover:bg-purple-600 text-white rounded-xl transition-all shadow-lg hover:shadow-purple-500/50 hover:scale-105">
-              {isFriend ? "Arkadaşlıktan Çıkar" : "Takip Et"}
-            </button>
+            <div className="flex flex-col gap-2">
+              {isFriend && (
+                <span className="px-4 py-1.5 bg-green-500/20 text-green-300 text-sm rounded-lg border border-green-500/30 flex items-center gap-2 justify-center">
+                  <Users className="w-4 h-4" />
+                  Arkadaş
+                </span>
+              )}
+              {isFollowing ? (
+                <button 
+                  onClick={handleUnfollow}
+                  disabled={friendshipLoading}
+                  className="px-8 py-3.5 bg-slate-700 hover:bg-red-500/20 hover:text-red-300 text-white rounded-xl transition-all shadow-lg hover:scale-105 flex items-center gap-2 disabled:opacity-50"
+                >
+                  {friendshipLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <UserMinus className="w-5 h-5" />
+                      Takipten Çık
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button 
+                  onClick={handleFollow}
+                  disabled={friendshipLoading}
+                  className="px-8 py-3.5 bg-purple-500 hover:bg-purple-600 text-white rounded-xl transition-all shadow-lg hover:shadow-purple-500/50 hover:scale-105 flex items-center gap-2 disabled:opacity-50"
+                >
+                  {friendshipLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <UserPlus className="w-5 h-5" />
+                      Takip Et
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
 
-      {/* Badges */}
-      {(profileUser as User).badges && (profileUser as User).badges.length > 0 && (
+      {/* Badges - Dynamic based on user stats */}
+      {calculatedBadges && calculatedBadges.length > 0 && (
         <div className="bg-slate-900/50 backdrop-blur rounded-xl p-6 border border-purple-500/10">
           <div className="flex items-center gap-2 mb-4">
             <Award className="w-6 h-6 text-purple-400" />
             <h2 className="text-2xl text-white">Rozetler</h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {(profileUser as User).badges.map((badge: Badge, index: number) => (
+            {calculatedBadges.map((badge, index: number) => (
               <div
                 key={index}
                 className={`p-4 rounded-xl border text-center transition-transform hover:scale-105 ${getBadgeStyle(
@@ -333,25 +389,97 @@ export function Profile() {
             </div>
           ) : (
             <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-              {currentItems.map((item) => (
-                <div key={item.id} className="group relative cursor-pointer">
-                  <img
-                    src={item.poster || "/default-poster.jpg"}
-                    alt={item.title}
-                    className="w-full aspect-[2/3] object-cover rounded-lg group-hover:ring-2 group-hover:ring-purple-500/50 transition-all"
-                  />
-                  {isOwnProfile && (
-                    <button
-                      onClick={() => handleRemoveItem(item, activeTab as 'watched' | 'favorite' | 'watchlist')}
-                      className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Kaldır"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                  <p className="text-white text-sm mt-2 line-clamp-1">{item.title}</p>
-                </div>
-              ))}
+              {currentItems.map((item) => {
+                // ID'den type ve gerçek ID'yi çıkar (örn: "movie-123" -> type: movie, id: 123)
+                const [type, ...idParts] = item.id.split('-');
+                const detailId = idParts.join('-');
+                const detailPath = 
+                  type === 'movie' ? `/movie/${detailId}` :
+                  type === 'series' ? `/series/${detailId}` :
+                  type === 'anime' ? `/anime/${detailId}` :
+                  '#';
+
+                return (
+                  <div key={item.id} className="group relative">
+                    <Link to={detailPath}>
+                      <img
+                        src={item.poster || "/default-poster.jpg"}
+                        alt={item.title}
+                        className="w-full aspect-[2/3] object-cover rounded-lg group-hover:ring-2 group-hover:ring-purple-500/50 transition-all cursor-pointer"
+                      />
+                    </Link>
+                    {isOwnProfile && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveItem(item, activeTab === 'favorites' ? 'favorite' : activeTab as 'watched' | 'favorite' | 'watchlist');
+                        }}
+                        className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        title="Kaldır"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                    <Link to={detailPath}>
+                      <p className="text-white text-sm mt-2 line-clamp-1 hover:text-purple-400 transition-colors cursor-pointer">
+                        {item.title}
+                      </p>
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6 pt-6 border-t border-purple-500/10">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg bg-slate-800/50 border border-slate-700 text-gray-400 hover:text-white hover:border-purple-500/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  // Sadece ilk 2, son 2 ve current page civarını göster
+                  if (
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`min-w-[40px] h-10 rounded-lg font-medium transition-all ${
+                          currentPage === page
+                            ? "bg-purple-500 text-white"
+                            : "bg-slate-800/50 border border-slate-700 text-gray-400 hover:text-white hover:border-purple-500/50"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  } else if (
+                    page === currentPage - 2 ||
+                    page === currentPage + 2
+                  ) {
+                    return <span key={page} className="text-gray-500">...</span>;
+                  }
+                  return null;
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg bg-slate-800/50 border border-slate-700 text-gray-400 hover:text-white hover:border-purple-500/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
             </div>
           )}
         </div>

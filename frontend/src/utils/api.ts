@@ -1,6 +1,8 @@
 import axios from "axios";
+import { config } from "../config";
 
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+// Use environment-based API URL
+const API_BASE_URL = config.apiBaseUrl;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -138,8 +140,8 @@ export const movieService = {
 
 export const socialService = {
   // Arkadaş aktivitelerini getir (sosyal akış)
-  getFeed: async (limit: number = 20) => {
-    const response = await api.get("/social/feed", { params: { limit } });
+  getFeed: async (limit: number = 20, source: "all" | "friends" | "me" = "all") => {
+    const response = await api.get("/social/feed", { params: { limit, source } });
     return response.data;
   },
 
@@ -201,6 +203,36 @@ export const socialService = {
     });
     
     return weeklyMovies.length;
+  },
+
+  // Aktivite beğen
+  likeActivity: async (filmId: number) => {
+    const response = await api.post(`/social/activity/${filmId}/like`);
+    return response.data;
+  },
+
+  // Aktivite beğenisini kaldır
+  unlikeActivity: async (filmId: number) => {
+    const response = await api.delete(`/social/activity/${filmId}/like`);
+    return response.data;
+  },
+
+  // Aktivite etkileşimlerini getir
+  getActivityInteractions: async (filmId: number) => {
+    const response = await api.get(`/social/activity/${filmId}/interactions`);
+    return response.data;
+  },
+
+  // Aktiviteye yorum ekle
+  addComment: async (filmId: number, content: string) => {
+    const response = await api.post(`/social/activity/${filmId}/comment`, { film_id: filmId, content });
+    return response.data;
+  },
+
+  // Yorumu sil
+  deleteComment: async (commentId: number) => {
+    const response = await api.delete(`/social/activity/comment/${commentId}`);
+    return response.data;
   },
 };
 

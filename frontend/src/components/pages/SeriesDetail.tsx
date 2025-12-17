@@ -285,22 +285,21 @@ export function SeriesDetail() {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={handleWatchedClick}
-                title={isWatched ? "İzlendi" : "İzlendi Olarak İşaretle"}
-                className={`p-2.5 rounded-lg transition-all border ${
+                className={`px-6 py-2.5 rounded-lg font-medium transition-all shadow-md hover:shadow-lg ${
                   isWatched
-                    ? "bg-green-500/20 border-green-400/50 text-green-300"
-                    : "bg-slate-800/30 border-slate-700 text-gray-400 hover:border-green-400/50 hover:text-green-400"
+                    ? "bg-green-500 text-white"
+                    : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
                 }`}
               >
-                {isWatched ? <Check className="w-5 h-5" /> : <Star className="w-5 h-5" />}
+                {isWatched ? "✓ İzlendi" : "İzledim"}
               </button>
 
               <button
                 onClick={handleFavoriteClick}
-                title={isFavorite ? "Favorilerde" : "Favorilere Ekle"}
+                title="Favorilere Ekle"
                 className={`p-2.5 rounded-lg transition-all border ${
                   isFavorite
-                    ? "bg-pink-500/20 border-pink-400/50 text-pink-300"
+                    ? "bg-pink-500/20 border-pink-500/50 text-pink-400"
                     : "bg-slate-800/30 border-slate-700 text-gray-400 hover:border-pink-400/50 hover:text-pink-400"
                 }`}
               >
@@ -309,10 +308,10 @@ export function SeriesDetail() {
 
               <button
                 onClick={handleWatchlistClick}
-                title={isWatchlist ? "Listede" : "İzleme Listesine Ekle"}
+                title="İzleme Listesine Ekle"
                 className={`p-2.5 rounded-lg transition-all border ${
                   isWatchlist
-                    ? "bg-blue-500/20 border-blue-400/50 text-blue-300"
+                    ? "bg-blue-500/20 border-blue-500/50 text-blue-400"
                     : "bg-slate-800/30 border-slate-700 text-gray-400 hover:border-blue-400/50 hover:text-blue-400"
                 }`}
               >

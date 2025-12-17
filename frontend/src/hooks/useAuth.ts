@@ -68,9 +68,13 @@ export function useAuth() {
     }
   };
 
+  // Get token from localStorage
+  const token = localStorage.getItem("access_token");
+
   return {
     currentUser: authState.currentUser,
     isAuthenticated: authState.isAuthenticated,
+    token,
     login,
     logout,
     updateUser,

@@ -1,8 +1,8 @@
 import { Link } from "react-router";
-import { Heart, MessageCircle, Star, Clock } from "lucide-react";
+import { Heart, MessageCircle, Star, Users, User as UserIcon, Globe, Send, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { userService, socialService } from "../../utils/api";
 
 interface User {
@@ -42,6 +42,20 @@ interface UserStats {
   }>;
 }
 
+interface ActivityInteraction {
+  like_count: number;
+  comment_count: number;
+  is_liked_by_me: boolean;
+  comments: Array<{
+    id: number;
+    user_id: number;
+    film_id: number;
+    content: string;
+    created_at: string;
+    user: User;
+  }>;
+}
+
 export function Home() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [stats, setStats] = useState<UserStats>({
@@ -54,6 +68,15 @@ export function Home() {
   const [weeklyMovies, setWeeklyMovies] = useState(0);
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [feedSource, setFeedSource] = useState<"all" | "friends" | "me">("all");
+  const [feedLoading, setFeedLoading] = useState(false);
+  
+  // Activity interactions state
+  const [interactions, setInteractions] = useState<Record<number, ActivityInteraction>>({});
+  const [likeLoading, setLikeLoading] = useState<number | null>(null);
+  const [commentInput, setCommentInput] = useState<Record<number, string>>({});
+  const [showComments, setShowComments] = useState<number | null>(null);
+  const [commentLoading, setCommentLoading] = useState<number | null>(null);
 
   const getBadgeStyle = (rarity: "legendary" | "rare" | "common") => {
     switch (rarity) {
@@ -66,6 +89,113 @@ export function Home() {
     }
   };
 
+  // Fetch feed based on source
+  const fetchFeed = useCallback(async (source: "all" | "friends" | "me") => {
+    console.log('📡 Fetching feed with source:', source);
+    try {
+      setFeedLoading(true);
+      const feedResponse = await socialService.getFeed(20, source);
+      console.log('📦 Feed response:', { source, itemCount: feedResponse.length });
+      setFeed(feedResponse);
+      
+      // Fetch interactions for each feed item
+      const interactionsMap: Record<number, ActivityInteraction> = {};
+      for (const item of feedResponse) {
+        try {
+          const interaction = await socialService.getActivityInteractions(item.film.id);
+          interactionsMap[item.film.id] = interaction;
+        } catch (err) {
+          // Ignore errors for individual interactions
+        }
+      }
+      setInteractions(interactionsMap);
+    } catch (error) {
+      console.error("Feed yüklenirken hata:", error);
+    } finally {
+      setFeedLoading(false);
+    }
+  }, []);
+
+  // Handle like/unlike
+  const handleLike = async (filmId: number) => {
+    try {
+      setLikeLoading(filmId);
+      const currentInteraction = interactions[filmId];
+      
+      if (currentInteraction?.is_liked_by_me) {
+        await socialService.unlikeActivity(filmId);
+        setInteractions(prev => ({
+          ...prev,
+          [filmId]: {
+            ...prev[filmId],
+            like_count: prev[filmId].like_count - 1,
+            is_liked_by_me: false
+          }
+        }));
+      } else {
+        await socialService.likeActivity(filmId);
+        setInteractions(prev => ({
+          ...prev,
+          [filmId]: {
+            ...prev[filmId] || { like_count: 0, comment_count: 0, is_liked_by_me: false, comments: [] },
+            like_count: (prev[filmId]?.like_count || 0) + 1,
+            is_liked_by_me: true
+          }
+        }));
+      }
+    } catch (error) {
+      console.error("Beğeni işlemi başarısız:", error);
+    } finally {
+      setLikeLoading(null);
+    }
+  };
+
+  // Handle add comment
+  const handleAddComment = async (filmId: number) => {
+    const content = commentInput[filmId]?.trim();
+    if (!content) return;
+    
+    try {
+      setCommentLoading(filmId);
+      const newComment = await socialService.addComment(filmId, content);
+      
+      setInteractions(prev => ({
+        ...prev,
+        [filmId]: {
+          ...prev[filmId] || { like_count: 0, comment_count: 0, is_liked_by_me: false, comments: [] },
+          comment_count: (prev[filmId]?.comment_count || 0) + 1,
+          comments: [newComment, ...(prev[filmId]?.comments || [])]
+        }
+      }));
+      
+      setCommentInput(prev => ({ ...prev, [filmId]: "" }));
+    } catch (error) {
+      console.error("Yorum eklenemedi:", error);
+    } finally {
+      setCommentLoading(null);
+    }
+  };
+
+  // Handle delete comment
+  const handleDeleteComment = async (filmId: number, commentId: number) => {
+    console.log('🗑️ Deleting comment:', { filmId, commentId });
+    try {
+      const result = await socialService.deleteComment(commentId);
+      console.log('✅ Delete comment result:', result);
+      
+      setInteractions(prev => ({
+        ...prev,
+        [filmId]: {
+          ...prev[filmId],
+          comment_count: prev[filmId].comment_count - 1,
+          comments: prev[filmId].comments.filter(c => c.id !== commentId)
+        }
+      }));
+    } catch (error) {
+      console.error("Yorum silinemedi:", error);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -73,13 +203,25 @@ export function Home() {
           userService.getUserProfile(),
           userService.getUserStats(),
           socialService.getWeeklyMovieCount(),
-          socialService.getFeed(20),
+          socialService.getFeed(20, feedSource),
         ]);
 
         setCurrentUser(userResponse);
         setStats(statsResponse);
         setWeeklyMovies(weeklyCount);
         setFeed(feedResponse);
+        
+        // Fetch interactions for each feed item
+        const interactionsMap: Record<number, ActivityInteraction> = {};
+        for (const item of feedResponse) {
+          try {
+            const interaction = await socialService.getActivityInteractions(item.film.id);
+            interactionsMap[item.film.id] = interaction;
+          } catch (err) {
+            // Ignore errors for individual interactions
+          }
+        }
+        setInteractions(interactionsMap);
       } catch (error) {
         console.error("Veri yüklenirken hata:", error);
       } finally {
@@ -89,6 +231,13 @@ export function Home() {
 
     fetchData();
   }, []);
+
+  // Refetch feed when source changes
+  useEffect(() => {
+    if (!loading) {
+      fetchFeed(feedSource);
+    }
+  }, [feedSource, fetchFeed, loading]);
 
   if (loading) {
     return (
@@ -183,8 +332,51 @@ export function Home() {
 
       {/* Activity Feed */}
       <div className="space-y-4">
-        <h2 className="text-2xl text-white">Arkadaş Aktiviteleri</h2>
-        {feed.length === 0 ? (
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl text-white">Aktiviteler</h2>
+          {/* Filter Tabs */}
+          <div className="flex bg-slate-900/70 rounded-lg p-1 gap-1">
+            <button
+              onClick={() => setFeedSource("all")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                feedSource === "all"
+                  ? "bg-purple-500/30 text-purple-300 border border-purple-500/30"
+                  : "text-gray-400 hover:text-white hover:bg-slate-700/50"
+              }`}
+            >
+              <Globe className="w-4 h-4" />
+              Hepsi
+            </button>
+            <button
+              onClick={() => setFeedSource("friends")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                feedSource === "friends"
+                  ? "bg-purple-500/30 text-purple-300 border border-purple-500/30"
+                  : "text-gray-400 hover:text-white hover:bg-slate-700/50"
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Arkadaşlar
+            </button>
+            <button
+              onClick={() => setFeedSource("me")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                feedSource === "me"
+                  ? "bg-purple-500/30 text-purple-300 border border-purple-500/30"
+                  : "text-gray-400 hover:text-white hover:bg-slate-700/50"
+              }`}
+            >
+              <UserIcon className="w-4 h-4" />
+              Ben
+            </button>
+          </div>
+        </div>
+        
+        {feedLoading ? (
+          <div className="bg-slate-900/50 backdrop-blur rounded-xl p-8 border border-purple-500/10 text-center">
+            <p className="text-gray-400">Yükleniyor...</p>
+          </div>
+        ) : feed.length === 0 ? (
           <div className="bg-slate-900/50 backdrop-blur rounded-xl p-8 border border-purple-500/10 text-center">
             <p className="text-gray-400">
               Henüz arkadaş aktivitesi yok. Arkadaş ekleyerek başla!
@@ -266,14 +458,96 @@ export function Home() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-6 mt-3 text-gray-400">
-                      <button className="flex items-center gap-2 hover:text-pink-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-pink-500/10">
-                        <Heart className="w-5 h-5" />
+                    <div className="flex items-center gap-4 mt-3 text-gray-400">
+                      <button 
+                        onClick={() => handleLike(item.film.id)}
+                        disabled={likeLoading === item.film.id}
+                        className={`flex items-center gap-2 transition-colors px-3 py-1.5 rounded-lg ${
+                          interactions[item.film.id]?.is_liked_by_me 
+                            ? "text-pink-400 bg-pink-500/10" 
+                            : "hover:text-pink-400 hover:bg-pink-500/10"
+                        } disabled:opacity-50`}
+                      >
+                        <Heart className={`w-5 h-5 ${interactions[item.film.id]?.is_liked_by_me ? "fill-pink-400" : ""}`} />
+                        <span className="text-sm">{interactions[item.film.id]?.like_count || 0}</span>
                       </button>
-                      <button className="flex items-center gap-2 hover:text-blue-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-blue-500/10">
+                      <button 
+                        onClick={() => setShowComments(showComments === item.film.id ? null : item.film.id)}
+                        className={`flex items-center gap-2 transition-colors px-3 py-1.5 rounded-lg ${
+                          showComments === item.film.id 
+                            ? "text-blue-400 bg-blue-500/10" 
+                            : "hover:text-blue-400 hover:bg-blue-500/10"
+                        }`}
+                      >
                         <MessageCircle className="w-5 h-5" />
+                        <span className="text-sm">{interactions[item.film.id]?.comment_count || 0}</span>
                       </button>
                     </div>
+
+                    {/* Comments Section */}
+                    {showComments === item.film.id && (
+                      <div className="mt-4 space-y-3 border-t border-slate-700/50 pt-4">
+                        {/* Comment Input */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={commentInput[item.film.id] || ""}
+                            onChange={(e) => setCommentInput(prev => ({ ...prev, [item.film.id]: e.target.value }))}
+                            placeholder="Yorum yaz..."
+                            className="flex-1 bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleAddComment(item.film.id);
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => handleAddComment(item.film.id)}
+                            disabled={commentLoading === item.film.id || !commentInput[item.film.id]?.trim()}
+                            className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Send className="w-5 h-5" />
+                          </button>
+                        </div>
+
+                        {/* Comments List */}
+                        {interactions[item.film.id]?.comments?.map((comment) => (
+                          <div key={comment.id} className="flex gap-3 p-3 bg-slate-800/30 rounded-lg">
+                            <Link to={`/profile/${comment.user.id}`}>
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
+                                {comment.user.username.charAt(0).toUpperCase()}
+                              </div>
+                            </Link>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <Link to={`/profile/${comment.user.id}`} className="text-white text-sm font-medium hover:text-purple-400">
+                                  {comment.user.username}
+                                </Link>
+                                <span className="text-gray-500 text-xs">
+                                  {formatDistanceToNow(new Date(comment.created_at + 'Z'), { addSuffix: true, locale: tr })}
+                                </span>
+                                {(currentUser?.id === comment.user_id || String(currentUser?.id) === String(comment.user_id)) && (
+                                  <button
+                                    onClick={() => {
+                                      console.log('Delete comment:', { currentUserId: currentUser?.id, commentUserId: comment.user_id, filmId: item.film.id, commentId: comment.id });
+                                      handleDeleteComment(item.film.id, comment.id);
+                                    }}
+                                    className="ml-auto text-gray-500 hover:text-red-400 transition-colors"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-gray-300 text-sm mt-1">{comment.content}</p>
+                            </div>
+                          </div>
+                        ))}
+
+                        {interactions[item.film.id]?.comments?.length === 0 && (
+                          <p className="text-gray-500 text-sm text-center py-2">Henüz yorum yok</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

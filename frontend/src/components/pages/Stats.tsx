@@ -1,78 +1,79 @@
-import { useState, useEffect } from "react";
-import { TrendingUp, Calendar, Clock, Film, Tv, Star, Loader2 } from "lucide-react";
-import { userService, movieService } from "../../utils/api";
-
-interface UserStats {
-  total_movies: number;
-  total_series: number;
-  average_rating: number | null;
-  total_watch_time: number;
-  total_reviews: number;
-  total_followers: number;
-  total_following: number;
-  movies_this_month: number;
-  movies_this_year: number;
-  series_watching: number;
-  series_completed: number;
-  total_watch_hours: number;
-  badges: { name: string; rarity: string }[];
-}
-
-interface UserMovie {
-  id: number;
-  tmdb_id: number;
-  title: string;
-  izlenme_tarihi: string;
-  kisisel_puan: number | null;
-}
-
-interface GenreStats {
-  genres: { name: string; count: number }[];
-  total: number;
-}
-
-const GENRE_COLORS = [
-  "bg-purple-500",
-  "bg-pink-500",
-  "bg-blue-500",
-  "bg-green-500",
-  "bg-yellow-500",
-  "bg-red-500",
-  "bg-indigo-500",
-  "bg-cyan-500",
-  "bg-orange-500",
-  "bg-teal-500",
-];
+import { useState, useEffect, useMemo } from "react";
+import { TrendingUp, Calendar, Clock, Film, Tv, Star } from "lucide-react";
+import { getUserLibrary, LibraryItem } from "../../utils/storage";
 
 export function Stats() {
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [movies, setMovies] = useState<UserMovie[]>([]);
-  const [genreStats, setGenreStats] = useState<GenreStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
+  // localStorage'dan library'yi al
+  const library = useMemo<LibraryItem[]>(() => {
+    return getUserLibrary();
+  }, [refreshKey]);
+
+  // localStorage değişikliklerini dinle
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setLoading(true);
-        const [statsData, moviesData, genresData] = await Promise.all([
-          userService.getUserStats(),
-          movieService.getUserMovies(),
-          movieService.getGenreStats()
-        ]);
-        setStats(statsData);
-        setMovies(moviesData);
-        setGenreStats(genresData);
-      } catch (err: any) {
-        console.error("Stats yüklenirken hata:", err);
-        setError(err.response?.data?.detail || "İstatistikler yüklenemedi");
-      } finally {
-        setLoading(false);
-      }
-    };
+    const interval = setInterval(() => {
+      setRefreshKey(prev => prev + 1);
+    }, 1000);
 
-    fetchStats();
+    return () => clearInterval(interval);
   }, []);
+
+  // İstatistikleri hesapla
+  const stats = useMemo(() => {
+    const watchedItems = library.filter((item) => item.watched);
+    const totalMovies = watchedItems.filter((item) => item.type === "movie").length;
+    const totalSeries = watchedItems.filter((item) => item.type === "series").length;
+    const totalAnimes = watchedItems.filter((item) => item.type === "anime").length;
+    
+    // Ortalama rating hesapla
+    const ratedItems = library.filter(item => item.rating);
+    const avgRating = ratedItems.length > 0 
+      ? ratedItems.reduce((sum, item) => sum + (item.rating || 0), 0) / ratedItems.length 
+      : 0;
+
+    // Toplam saat (ortalama film 2 saat, dizi bölümü 45 dk, anime 24 dk)
+    const movieHours = totalMovies * 2;
+    const seriesHours = totalSeries * 0.75;
+    const animeHours = totalAnimes * 0.4;
+    const totalHours = Math.round(movieHours + seriesHours + animeHours);
+
+    return {
+      total_movies: totalMovies,
+      total_series: totalSeries,
+      total_anime: totalAnimes,
+      total_watch_hours: totalHours,
+      average_rating: avgRating,
+      total_favorites: library.filter((item) => item.favorite).length,
+      total_watchlist: library.filter((item) => item.watchlist).length,
+    };
+  }, [library]);
+
+  // Dinamik rozetler hesapla
+  const calculatedBadges = useMemo(() => {
+    const badges: { name: string; rarity: "legendary" | "rare" | "common" }[] = [];
+    const totalWatched = stats.total_movies + stats.total_series + stats.total_anime;
+
+    if (stats.total_movies >= 100) badges.push({ name: "🎬 Film Ustası", rarity: "legendary" });
+    else if (stats.total_movies >= 50) badges.push({ name: "🎬 Sinefil", rarity: "rare" });
+    else if (stats.total_movies >= 10) badges.push({ name: "🎬 Film Sever", rarity: "common" });
+
+    if (stats.total_series >= 50) badges.push({ name: "📺 Dizi Kralı", rarity: "legendary" });
+    else if (stats.total_series >= 20) badges.push({ name: "📺 Dizi Bağımlısı", rarity: "rare" });
+    else if (stats.total_series >= 5) badges.push({ name: "📺 Dizi Takipçisi", rarity: "common" });
+
+    if (stats.total_anime >= 50) badges.push({ name: "🎌 Otaku", rarity: "legendary" });
+    else if (stats.total_anime >= 20) badges.push({ name: "🎌 Anime Tutkunu", rarity: "rare" });
+    else if (stats.total_anime >= 5) badges.push({ name: "🎌 Anime Sever", rarity: "common" });
+
+    if (totalWatched >= 200) badges.push({ name: "🏆 Efsane İzleyici", rarity: "legendary" });
+    else if (totalWatched >= 100) badges.push({ name: "🏆 Uzman İzleyici", rarity: "rare" });
+    else if (totalWatched >= 25) badges.push({ name: "🏆 Aktif İzleyici", rarity: "common" });
+
+    if (totalWatched === 0) badges.push({ name: "🌟 Yeni Üye", rarity: "common" });
+
+    return badges;
+  }, [stats]);
 
   // Aylık verileri hesapla
   const calculateMonthlyData = () => {
@@ -80,29 +81,17 @@ export function Stats() {
     const currentYear = new Date().getFullYear();
     
     const monthlyData = months.map((month, index) => {
-      const moviesInMonth = movies.filter(movie => {
-        const date = new Date(movie.izlenme_tarihi);
-        return date.getFullYear() === currentYear && date.getMonth() === index;
-      }).length;
+      const itemsInMonth = library.filter(item => {
+        const date = new Date(item.timestamp);
+        return date.getFullYear() === currentYear && date.getMonth() === index && item.watched;
+      });
+      const moviesInMonth = itemsInMonth.filter(i => i.type === 'movie').length;
+      const seriesInMonth = itemsInMonth.filter(i => i.type === 'series' || i.type === 'anime').length;
       
-      return { month, movies: moviesInMonth, series: 0 };
+      return { month, movies: moviesInMonth, series: seriesInMonth };
     });
     
     return monthlyData;
-  };
-
-  // Tür dağılımını hesapla
-  const getTopGenres = () => {
-    if (!genreStats || genreStats.genres.length === 0) {
-      return [];
-    }
-    
-    // İlk 5 türü al
-    return genreStats.genres.slice(0, 5).map((genre, index) => ({
-      name: genre.name,
-      count: genre.count,
-      color: GENRE_COLORS[index % GENRE_COLORS.length]
-    }));
   };
 
   // Bu hafta verileri
@@ -110,44 +99,26 @@ export function Stats() {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     
-    const moviesThisWeek = movies.filter(movie => {
-      const date = new Date(movie.izlenme_tarihi);
-      return date >= oneWeekAgo;
+    const itemsThisWeek = library.filter(item => {
+      const date = new Date(item.timestamp);
+      return date >= oneWeekAgo && item.watched;
     });
     
-    const reviewsThisWeek = moviesThisWeek.filter(m => m.kisisel_puan).length;
-    const hoursThisWeek = moviesThisWeek.length * 2; // Ortalama 2 saat
+    const moviesThisWeek = itemsThisWeek.filter(i => i.type === 'movie').length;
+    const seriesThisWeek = itemsThisWeek.filter(i => i.type === 'series' || i.type === 'anime').length;
+    const hoursThisWeek = Math.round(moviesThisWeek * 2 + seriesThisWeek * 0.5);
     
     return {
-      movies: moviesThisWeek.length,
-      series: 0,
+      movies: moviesThisWeek,
+      series: seriesThisWeek,
       hours: hoursThisWeek,
-      reviews: reviewsThisWeek
+      reviews: 0
     };
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-        <span className="ml-2 text-gray-400">İstatistikler yükleniyor...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">{error}</p>
-      </div>
-    );
-  }
-
   const monthlyData = calculateMonthlyData();
-  const topGenres = getTopGenres();
   const thisWeek = getThisWeekStats();
   const maxValue = Math.max(...monthlyData.map((d) => d.movies + d.series), 1);
-  const totalHoursWatched = stats?.total_watch_hours || 0;
 
   return (
     <div className="space-y-6">
@@ -162,7 +133,7 @@ export function Stats() {
         <div className="bg-gradient-to-br from-purple-900/40 to-purple-900/20 rounded-xl p-6 border border-purple-500/20">
           <Film className="w-8 h-8 text-purple-400 mb-3" />
           <div className="text-3xl text-white mb-1">
-            {stats?.total_movies || 0}
+            {stats.total_movies}
           </div>
           <div className="text-gray-400">Toplam Film</div>
         </div>
@@ -170,22 +141,22 @@ export function Stats() {
         <div className="bg-gradient-to-br from-pink-900/40 to-pink-900/20 rounded-xl p-6 border border-pink-500/20">
           <Tv className="w-8 h-8 text-pink-400 mb-3" />
           <div className="text-3xl text-white mb-1">
-            {stats?.total_series || 0}
+            {stats.total_series + stats.total_anime}
           </div>
-          <div className="text-gray-400">Toplam Dizi</div>
+          <div className="text-gray-400">Toplam Dizi/Anime</div>
         </div>
 
         <div className="bg-gradient-to-br from-blue-900/40 to-blue-900/20 rounded-xl p-6 border border-blue-500/20">
           <Clock className="w-8 h-8 text-blue-400 mb-3" />
           <div className="text-3xl text-white mb-1">
-            {totalHoursWatched.toLocaleString()}
+            {stats.total_watch_hours.toLocaleString()}
           </div>
           <div className="text-gray-400">Saat İzlendi</div>
         </div>
 
         <div className="bg-gradient-to-br from-yellow-900/40 to-yellow-900/20 rounded-xl p-6 border border-yellow-500/20">
           <Star className="w-8 h-8 text-yellow-400 mb-3" />
-          <div className="text-3xl text-white mb-1">{stats?.average_rating?.toFixed(1) || '0.0'}</div>
+          <div className="text-3xl text-white mb-1">{stats.average_rating.toFixed(1)}</div>
           <div className="text-gray-400">Ortalama Puan</div>
         </div>
       </div>
@@ -241,36 +212,10 @@ export function Stats() {
       {/* Top Genres */}
       <div className="bg-slate-900/50 backdrop-blur rounded-xl p-6 border border-purple-500/10">
         <h2 className="text-2xl text-white mb-6">En Çok İzlenen Türler</h2>
-        {topGenres.length > 0 ? (
-          <div className="space-y-4">
-            {topGenres.map((genre, index) => {
-              const totalMovies = stats?.total_movies || 1;
-              const percentage = (genre.count / totalMovies) * 100;
-
-              return (
-                <div key={index}>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-gray-300">{genre.name}</span>
-                    <span className="text-gray-400">
-                      {genre.count} film ({percentage.toFixed(0)}%)
-                    </span>
-                  </div>
-                  <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${genre.color} transition-all duration-500`}
-                      style={{ width: `${percentage}%` }}
-                    ></div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <div className="text-4xl mb-4">🎬</div>
-            <p className="text-gray-400">Henüz izlenen film yok</p>
-          </div>
-        )}
+        <div className="text-center py-8">
+          <div className="text-4xl mb-4">🎭</div>
+          <p className="text-gray-400">Tür istatistikleri yakında eklenecek</p>
+        </div>
       </div>
 
       {/* This Week Stats */}
@@ -310,9 +255,9 @@ export function Stats() {
       {/* Achievements */}
       <div className="bg-slate-900/50 backdrop-blur rounded-xl p-6 border border-purple-500/10">
         <h2 className="text-2xl text-white mb-6">Rozetler</h2>
-        {stats?.badges && stats.badges.length > 0 ? (
+        {calculatedBadges.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {stats.badges.map((badge, index) => {
+            {calculatedBadges.map((badge, index) => {
               const getBadgeStyle = () => {
                 switch (badge.rarity) {
                   case "legendary":
@@ -350,26 +295,26 @@ export function Stats() {
           <div className="bg-black/20 rounded-lg p-4">
             <div className="text-purple-400 mb-2">🍿 Toplam İçerik</div>
             <div className="text-white">
-              {(stats?.total_movies || 0) + (stats?.total_series || 0)} film ve dizi
+              {stats.total_movies + stats.total_series + stats.total_anime} film, dizi ve anime
               izledin
             </div>
           </div>
           <div className="bg-black/20 rounded-lg p-4">
             <div className="text-pink-400 mb-2">⏰ Zaman</div>
             <div className="text-white">
-              {Math.floor(totalHoursWatched / 24)} gün sinemada geçirdin
+              {Math.floor(stats.total_watch_hours / 24)} gün sinemada geçirdin
             </div>
           </div>
           <div className="bg-black/20 rounded-lg p-4">
-            <div className="text-blue-400 mb-2">🌟 Ortalama</div>
+            <div className="text-blue-400 mb-2">❤️ Favoriler</div>
             <div className="text-white">
-              Günde ortalama 2.3 saat izliyorsun
+              {stats.total_favorites} içerik favorilerine eklendi
             </div>
           </div>
           <div className="bg-black/20 rounded-lg p-4">
-            <div className="text-green-400 mb-2">🏆 Sıralama</div>
+            <div className="text-green-400 mb-2">📋 İzleme Listesi</div>
             <div className="text-white">
-              Kullanıcıların en aktif %5'indesin!
+              {stats.total_watchlist} içerik izlemeyi bekliyor
             </div>
           </div>
         </div>

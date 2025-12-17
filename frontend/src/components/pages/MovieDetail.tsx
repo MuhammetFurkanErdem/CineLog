@@ -20,6 +20,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { movieService, externalService, jikanService } from "../../utils/api";
+import { toggleInteraction, getItemStatus } from "../../utils/storage";
 
 interface TMDBMovie {
   id: number;
@@ -156,7 +157,13 @@ export function MovieDetail() {
         const tmdbMovie = await movieService.getMovieDetails(parseInt(movieId));
         setMovie(tmdbMovie);
         
-        // Kullanıcının film listesini kontrol et
+        // localStorage'dan durum kontrolü
+        const localStatus = getItemStatus(`movie-${movieId}`);
+        setIsWatched(localStatus.isWatched);
+        setIsFavorite(localStatus.isFavorite);
+        setIsInWatchlist(localStatus.isWatchlist);
+        
+        // Kullanıcının film listesini kontrol et (backend)
         try {
           const userMovies = await movieService.getUserMovies();
           const existingFilm = userMovies.find(
@@ -165,9 +172,6 @@ export function MovieDetail() {
           
           if (existingFilm) {
             setUserFilm(existingFilm);
-            setIsWatched(existingFilm.izlendi);
-            setIsFavorite(existingFilm.is_favorite);
-            setIsInWatchlist(existingFilm.is_watchlist);
             setUserRating(existingFilm.kisisel_puan || 0);
             setReviewText(existingFilm.kisisel_yorum || "");
           }
@@ -230,17 +234,36 @@ export function MovieDetail() {
   const handleWatchedClick = async () => {
     if (!movie || actionLoading) return;
     
+    // localStorage'a kaydet (profil için)
+    const posterUrl = movie.poster_path 
+      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` 
+      : "/placeholder-movie.png";
+    const releaseYear = movie.release_date 
+      ? new Date(movie.release_date).getFullYear() 
+      : undefined;
+    
+    const newState = toggleInteraction(
+      {
+        id: `movie-${movie.id}`,
+        type: 'movie',
+        title: movie.title,
+        poster: posterUrl,
+        year: releaseYear,
+        rating: movie.vote_average || undefined,
+      },
+      'watched'
+    );
+    setIsWatched(newState);
+    
+    // Backend'e de kaydet (opsiyonel)
     setActionLoading(true);
     try {
       if (userFilm) {
-        // Film zaten listede, güncelle
         const updated = await movieService.updateMovie(userFilm.id, {
-          izlendi: !isWatched,
+          izlendi: newState,
         });
         setUserFilm(updated);
-        setIsWatched(!isWatched);
-      } else {
-        // Film listede yok, ekle
+      } else if (newState) {
         const newFilm = await movieService.addMovie({
           tmdb_id: movie.id,
           title: movie.title,
@@ -250,11 +273,10 @@ export function MovieDetail() {
           izlendi: true,
         });
         setUserFilm(newFilm);
-        setIsWatched(true);
       }
     } catch (err: any) {
-      console.error("Film güncellenirken hata:", err);
-      alert(err.response?.data?.detail || "İşlem başarısız oldu");
+      console.error("Backend güncelleme hatası:", err);
+      // localStorage zaten güncellendi, backend hatası görmezden gel
     } finally {
       setActionLoading(false);
     }
@@ -352,17 +374,36 @@ export function MovieDetail() {
   const handleFavoriteClick = async () => {
     if (!movie || actionLoading) return;
     
+    // localStorage'a kaydet (profil için)
+    const posterUrl = movie.poster_path 
+      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` 
+      : "/placeholder-movie.png";
+    const releaseYear = movie.release_date 
+      ? new Date(movie.release_date).getFullYear() 
+      : undefined;
+    
+    const newState = toggleInteraction(
+      {
+        id: `movie-${movie.id}`,
+        type: 'movie',
+        title: movie.title,
+        poster: posterUrl,
+        year: releaseYear,
+        rating: movie.vote_average || undefined,
+      },
+      'favorite'
+    );
+    setIsFavorite(newState);
+    
+    // Backend'e de kaydet (opsiyonel)
     setActionLoading(true);
     try {
       if (userFilm) {
-        // Film zaten listede, güncelle
         const updated = await movieService.updateMovie(userFilm.id, {
-          is_favorite: !isFavorite,
+          is_favorite: newState,
         });
         setUserFilm(updated);
-        setIsFavorite(!isFavorite);
-      } else {
-        // Film listede yok, ekle
+      } else if (newState) {
         const newFilm = await movieService.addMovie({
           tmdb_id: movie.id,
           title: movie.title,
@@ -372,11 +413,9 @@ export function MovieDetail() {
           is_favorite: true,
         });
         setUserFilm(newFilm);
-        setIsFavorite(true);
       }
     } catch (err: any) {
-      console.error("Favori güncellenirken hata:", err);
-      alert(err.response?.data?.detail || "İşlem başarısız oldu");
+      console.error("Backend güncelleme hatası:", err);
     } finally {
       setActionLoading(false);
     }
@@ -386,17 +425,36 @@ export function MovieDetail() {
   const handleWatchlistClick = async () => {
     if (!movie || actionLoading) return;
     
+    // localStorage'a kaydet (profil için)
+    const posterUrl = movie.poster_path 
+      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` 
+      : "/placeholder-movie.png";
+    const releaseYear = movie.release_date 
+      ? new Date(movie.release_date).getFullYear() 
+      : undefined;
+    
+    const newState = toggleInteraction(
+      {
+        id: `movie-${movie.id}`,
+        type: 'movie',
+        title: movie.title,
+        poster: posterUrl,
+        year: releaseYear,
+        rating: movie.vote_average || undefined,
+      },
+      'watchlist'
+    );
+    setIsInWatchlist(newState);
+    
+    // Backend'e de kaydet (opsiyonel)
     setActionLoading(true);
     try {
       if (userFilm) {
-        // Film zaten listede, güncelle
         const updated = await movieService.updateMovie(userFilm.id, {
-          is_watchlist: !isInWatchlist,
+          is_watchlist: newState,
         });
         setUserFilm(updated);
-        setIsInWatchlist(!isInWatchlist);
-      } else {
-        // Film listede yok, ekle
+      } else if (newState) {
         const newFilm = await movieService.addMovie({
           tmdb_id: movie.id,
           title: movie.title,
@@ -406,11 +464,9 @@ export function MovieDetail() {
           is_watchlist: true,
         });
         setUserFilm(newFilm);
-        setIsInWatchlist(true);
       }
     } catch (err: any) {
-      console.error("İzleme listesi güncellenirken hata:", err);
-      alert(err.response?.data?.detail || "İşlem başarısız oldu");
+      console.error("Backend güncelleme hatası:", err);
     } finally {
       setActionLoading(false);
     }

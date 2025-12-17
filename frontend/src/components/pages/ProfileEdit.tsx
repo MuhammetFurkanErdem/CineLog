@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../../hooks/useAuth";
-import { ArrowLeft, Save, Upload } from "lucide-react";
+import { ArrowLeft, Save, Upload, AlertCircle } from "lucide-react";
+import axios from "axios";
 
 export function ProfileEdit() {
   const navigate = useNavigate();
   const { currentUser, updateUser } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: currentUser?.name || "",
@@ -15,6 +17,7 @@ export function ProfileEdit() {
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!currentUser) {
     navigate("/login");
@@ -24,24 +27,73 @@ export function ProfileEdit() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+    setError(null);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      // Username değiştiyse backend'e gönder
+      if (formData.username !== currentUser.username) {
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+          throw new Error("Token bulunamadı. Lütfen tekrar giriş yapın.");
+        }
 
-    updateUser({
-      name: formData.name,
-      username: formData.username,
-      bio: formData.bio,
-      avatar: formData.avatar,
-    });
+        // Backend'e username güncelleme isteği
+        await axios.put(
+          "http://127.0.0.1:8000/api/users/me",
+          { username: formData.username },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+      }
 
-    setIsSaving(false);
-    navigate("/profile");
+      // localStorage'daki kullanıcı bilgilerini güncelle
+      updateUser({
+        name: formData.name,
+        username: formData.username,
+        bio: formData.bio,
+        avatar: formData.avatar,
+      });
+
+      navigate("/profile");
+    } catch (err: any) {
+      console.error("Profil güncelleme hatası:", err);
+      const errorMessage = err.response?.data?.detail || "Profil güncellenirken bir hata oluştu.";
+      setError(errorMessage);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAvatarUpload = () => {
-    // TODO: Implement file upload
-    alert("Avatar upload will be implemented with backend integration");
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Dosya boyutu kontrolü (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Dosya boyutu 5MB'dan küçük olmalıdır.");
+      return;
+    }
+
+    // Dosya tipi kontrolü
+    if (!file.type.startsWith("image/")) {
+      alert("Lütfen bir resim dosyası seçin.");
+      return;
+    }
+
+    // Base64'e çevir ve formData'ya kaydet
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setFormData({ ...formData, avatar: base64String });
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -61,6 +113,14 @@ export function ProfileEdit() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-red-300 text-sm">{error}</p>
+          </div>
+        )}
+
         {/* Avatar */}
         <div className="bg-slate-900/50 backdrop-blur rounded-xl p-6 border border-purple-500/10">
           <label className="block text-sm font-medium text-gray-300 mb-4">
@@ -71,6 +131,13 @@ export function ProfileEdit() {
               src={formData.avatar || "/default-avatar.png"}
               alt="Avatar"
               className="w-24 h-24 rounded-full object-cover ring-4 ring-purple-500/30"
+            />
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              className="hidden"
             />
             <button
               type="button"
