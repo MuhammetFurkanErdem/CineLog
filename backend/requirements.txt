@@ -16,6 +16,8 @@ numpy==2.1.3
 # Google Auth
 google-auth==2.27.0
 
+requests==2.31.0
+
 # Environment
 python-dotenv==1.0.1
 
