@@ -3,6 +3,10 @@
     {
       "source": "/api/(.*)",
       "destination": "https://api.furkanerdem.me/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
