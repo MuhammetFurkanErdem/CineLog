@@ -332,42 +332,42 @@ export function Home() {
 
       {/* Activity Feed */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl text-white">Aktiviteler</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h2 className="text-xl sm:text-2xl text-white">Aktiviteler</h2>
           {/* Filter Tabs */}
-          <div className="flex bg-slate-900/70 rounded-lg p-1 gap-1">
+          <div className="flex bg-slate-900/70 rounded-lg p-1 gap-0.5 sm:gap-1">
             <button
               onClick={() => setFeedSource("all")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+              className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1 sm:gap-2 ${
                 feedSource === "all"
                   ? "bg-purple-500/30 text-purple-300 border border-purple-500/30"
                   : "text-gray-400 hover:text-white hover:bg-slate-700/50"
               }`}
             >
-              <Globe className="w-4 h-4" />
-              Hepsi
+              <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Hepsi</span>
             </button>
             <button
               onClick={() => setFeedSource("friends")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+              className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1 sm:gap-2 ${
                 feedSource === "friends"
                   ? "bg-purple-500/30 text-purple-300 border border-purple-500/30"
                   : "text-gray-400 hover:text-white hover:bg-slate-700/50"
               }`}
             >
-              <Users className="w-4 h-4" />
-              Arkadaşlar
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Arkadaşlar</span>
             </button>
             <button
               onClick={() => setFeedSource("me")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+              className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1 sm:gap-2 ${
                 feedSource === "me"
                   ? "bg-purple-500/30 text-purple-300 border border-purple-500/30"
                   : "text-gray-400 hover:text-white hover:bg-slate-700/50"
               }`}
             >
-              <UserIcon className="w-4 h-4" />
-              Ben
+              <UserIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Ben</span>
             </button>
           </div>
         </div>

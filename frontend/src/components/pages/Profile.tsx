@@ -139,44 +139,44 @@ export function Profile() {
   })();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Profile Header */}
-      <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 rounded-2xl p-6 border border-purple-500/20">
-        <div className="flex flex-col md:flex-row items-center gap-6">
+      <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 rounded-2xl p-4 sm:p-6 border border-purple-500/20">
+        <div className="flex flex-col md:flex-row items-center gap-4 sm:gap-6">
           {/* Avatar */}
           <img
             src={profileUser.avatar || "/default-avatar.png"}
             alt={profileUser.name}
-            className="w-32 h-32 rounded-full object-cover ring-4 ring-purple-500/30"
+            className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full object-cover ring-4 ring-purple-500/30"
           />
 
           {/* User Info */}
           <div className="flex-1 text-center md:text-left">
-            <h1 className="text-3xl text-white mb-1">{profileUser.name}</h1>
-            <p className="text-gray-400 mb-3">@{profileUser.username}</p>
-            {(profileUser as User).bio && <p className="text-gray-300 mb-4">{(profileUser as User).bio}</p>}
+            <h1 className="text-xl sm:text-2xl md:text-3xl text-white mb-1">{profileUser.name}</h1>
+            <p className="text-gray-400 text-sm sm:text-base mb-2 sm:mb-3">@{profileUser.username}</p>
+            {(profileUser as User).bio && <p className="text-gray-300 text-sm sm:text-base mb-3 sm:mb-4">{(profileUser as User).bio}</p>}
 
             {/* Stats */}
-            <div className="flex flex-wrap justify-center md:justify-start gap-6 text-sm">
+            <div className="flex flex-wrap justify-center md:justify-start gap-3 sm:gap-4 md:gap-6 text-xs sm:text-sm">
               <div>
-                <span className="text-2xl text-purple-400">{stats.totalMovies}</span>
-                <span className="text-gray-400 ml-2">Film</span>
+                <span className="text-lg sm:text-xl md:text-2xl text-purple-400">{stats.totalMovies}</span>
+                <span className="text-gray-400 ml-1 sm:ml-2">Film</span>
               </div>
               <div>
-                <span className="text-2xl text-pink-400">{stats.totalSeries}</span>
-                <span className="text-gray-400 ml-2">Dizi</span>
+                <span className="text-lg sm:text-xl md:text-2xl text-pink-400">{stats.totalSeries}</span>
+                <span className="text-gray-400 ml-1 sm:ml-2">Dizi</span>
               </div>
               <div>
-                <span className="text-2xl text-blue-400">{stats.totalAnimes}</span>
-                <span className="text-gray-400 ml-2">Anime</span>
+                <span className="text-lg sm:text-xl md:text-2xl text-blue-400">{stats.totalAnimes}</span>
+                <span className="text-gray-400 ml-1 sm:ml-2">Anime</span>
               </div>
               <div>
-                <span className="text-2xl text-green-400">{stats.totalFavorites}</span>
-                <span className="text-gray-400 ml-2">Favori</span>
+                <span className="text-lg sm:text-xl md:text-2xl text-green-400">{stats.totalFavorites}</span>
+                <span className="text-gray-400 ml-1 sm:ml-2">Favori</span>
               </div>
               <div>
-                <span className="text-2xl text-yellow-400">{stats.totalReviews}</span>
-                <span className="text-gray-400 ml-2">İnceleme</span>
+                <span className="text-lg sm:text-xl md:text-2xl text-yellow-400">{stats.totalReviews}</span>
+                <span className="text-gray-400 ml-1 sm:ml-2">İnceleme</span>
               </div>
             </div>
           </div>

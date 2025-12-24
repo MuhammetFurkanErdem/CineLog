@@ -77,17 +77,17 @@ export function Discover() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl text-white mb-2">Keşfet</h1>
-        <p className="text-gray-400">
+        <h1 className="text-2xl sm:text-3xl text-white mb-1 sm:mb-2">Keşfet</h1>
+        <p className="text-gray-400 text-sm sm:text-base">
           Film, dizi ve anime keşfet, puanla ve listenize ekleyin
         </p>
       </div>
 
       {/* Search */}
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
@@ -95,7 +95,7 @@ export function Discover() {
             placeholder={`${getTabConfig(activeTab).label} ara...`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-900/50 border border-purple-500/20 rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+            className="w-full bg-slate-900/50 border border-purple-500/20 rounded-xl pl-10 sm:pl-12 pr-4 py-2 sm:py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
           />
           {searchQuery && (
             <button
@@ -135,14 +135,14 @@ export function Discover() {
               <button
                 key={tab}
                 onClick={() => handleTabChange(tab)}
-                className={`px-6 py-2.5 rounded-xl font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
+                className={`px-3 sm:px-4 md:px-6 py-1.5 sm:py-2 md:py-2.5 rounded-lg sm:rounded-xl text-sm sm:text-base font-medium whitespace-nowrap transition-all flex items-center gap-1.5 sm:gap-2 ${
                   activeTab === tab
                     ? "bg-purple-500 text-white shadow-lg shadow-purple-500/30"
                     : "bg-slate-800/50 text-gray-300 hover:bg-slate-700/50"
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                {config.label}
+                <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>{config.label}</span>
               </button>
             );
           })}
