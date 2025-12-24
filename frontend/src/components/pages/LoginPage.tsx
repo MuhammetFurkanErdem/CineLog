@@ -219,6 +219,12 @@ export default function LoginPage() {
       return;
     }
     
+    if (emailAvailable === false) {
+      setRegisterError("Bu email adresi zaten kullanılıyor");
+      setRegisterLoading(false);
+      return;
+    }
+    
     try {
       const response = await api.post("/auth/register", {
         username: registerUsername,
@@ -536,7 +542,14 @@ export default function LoginPage() {
                   {/* Register Button */}
                   <button
                     type="submit"
-                    disabled={registerLoading || passwordStrength < 100 || !usernameAvailable || registerPassword !== registerPasswordConfirm}
+                    disabled={
+                      registerLoading || 
+                      passwordStrength < 100 || 
+                      !usernameAvailable || 
+                      emailAvailable === false ||
+                      !registerEmail ||
+                      registerPassword !== registerPasswordConfirm
+                    }
                     className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold rounded-lg transition-all shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {registerLoading ? (

@@ -41,7 +41,13 @@ class Settings(BaseSettings):
         # Production domains
         "https://furkanerdem.me",
         "https://www.furkanerdem.me",
+        "http://furkanerdem.me",
+        "http://www.furkanerdem.me",
         "https://cinelog.furkanerdem.me",
+        "https://www.cinelog.furkanerdem.me",
+        # Vercel
+        "https://cinelog.vercel.app",
+        "https://cine-log.vercel.app",
     ]
     
     # Environment
