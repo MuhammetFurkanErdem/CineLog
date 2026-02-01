@@ -64,14 +64,17 @@ export function useProfile({ userId }: UseProfileParams) {
     const fetchUserData = async () => {
       if (!isOwnProfile && profileUserId) {
         console.log('🔄 Fetching friend profile data:', profileUserId);
+        const timestamp = Date.now(); // Cache bypass
         try {
           // Fetch user profile
-          const userResponse = await axios.get(`${API_BASE_URL}/users/${profileUserId}`);
+          const userResponse = await axios.get(`${API_BASE_URL}/users/${profileUserId}?_t=${timestamp}`);
           setFetchedUser(userResponse.data);
           
-          // Fetch user's films
+          // Fetch user's films (with cache bypass)
           try {
-            const filmsResponse = await axios.get(`${API_BASE_URL}/users/${profileUserId}/films`);
+            const filmsResponse = await axios.get(`${API_BASE_URL}/users/${profileUserId}/films?_t=${timestamp}`, {
+              headers: { 'Cache-Control': 'no-cache' }
+            });
             console.log('📦 Fetched films count:', filmsResponse.data.length);
             setFetchedFilms(filmsResponse.data);
           } catch (filmError) {
@@ -107,13 +110,13 @@ export function useProfile({ userId }: UseProfileParams) {
 
     fetchUserData();
     
-    // Auto-refresh friend's profile every 5 seconds
+    // Auto-refresh friend's profile every 3 seconds (more frequent)
     if (!isOwnProfile && profileUserId) {
       console.log('⏰ Setting up auto-refresh for profile:', profileUserId);
       const interval = setInterval(() => {
         console.log('🔄 Auto-refreshing profile...');
         fetchUserData();
-      }, 5000);
+      }, 3000);
       return () => {
         console.log('🛑 Clearing auto-refresh interval');
         clearInterval(interval);
