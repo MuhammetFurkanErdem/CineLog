@@ -19,13 +19,19 @@ ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 
 
 def hash_password(password: str) -> str:
-    """Şifreyi hash'ler"""
-    return pwd_context.hash(password)
+    """Şifreyi hash'ler
+    bcrypt 72 byte limiti olduğu için truncate edilir
+    """
+    # bcrypt 72 byte limiti var, truncate et
+    truncated_password = password[:72] if len(password.encode('utf-8')) > 72 else password
+    return pwd_context.hash(truncated_password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Şifre doğrulama"""
-    return pwd_context.verify(plain_password, hashed_password)
+    # bcrypt 72 byte limiti var, truncate et
+    truncated_password = plain_password[:72] if len(plain_password.encode('utf-8')) > 72 else plain_password
+    return pwd_context.verify(truncated_password, hashed_password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
