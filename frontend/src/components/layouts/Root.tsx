@@ -14,7 +14,7 @@ export function Root() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 overflow-x-hidden">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-slate-900/80 backdrop-blur-xl border-b border-purple-500/20">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -53,7 +53,7 @@ export function Root() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6 pb-24 md:pb-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 pb-24 md:pb-6 overflow-x-hidden">
         <Outlet />
       </main>
 

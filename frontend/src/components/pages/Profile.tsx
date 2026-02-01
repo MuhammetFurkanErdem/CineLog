@@ -183,20 +183,20 @@ export function Profile() {
 
           {/* Actions */}
           {isOwnProfile && (
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               <button 
                 onClick={handleEdit}
-                className="px-6 py-3 bg-slate-800/50 hover:bg-slate-700/50 text-white rounded-xl transition-all flex items-center gap-2 shadow-lg hover:scale-105"
+                className="px-3 sm:px-6 py-2 sm:py-3 bg-slate-800/50 hover:bg-slate-700/50 text-white rounded-xl transition-all flex items-center gap-1.5 sm:gap-2 shadow-lg hover:scale-105 text-sm sm:text-base"
               >
-                <Settings className="w-5 h-5" />
-                Düzenle
+                <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden xs:inline">Düzenle</span>
               </button>
               <button 
                 onClick={handleLogout}
-                className="px-6 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-xl transition-all flex items-center gap-2 border border-red-500/30"
+                className="px-3 sm:px-6 py-2 sm:py-3 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-xl transition-all flex items-center gap-1.5 sm:gap-2 border border-red-500/30 text-sm sm:text-base"
               >
-                <LogOut className="w-5 h-5" />
-                Çıkış Yap
+                <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden xs:inline">Çıkış Yap</span>
               </button>
             </div>
           )}
@@ -328,12 +328,12 @@ export function Profile() {
       {/* Profile Tabs */}
       <div className="bg-slate-900/50 backdrop-blur rounded-2xl border border-purple-500/10 overflow-hidden">
         {/* Tab Headers */}
-        <div className="border-b border-slate-800/50 px-6 pt-6">
-          <div className="flex gap-2 flex-wrap">
+        <div className="border-b border-slate-800/50 px-3 sm:px-6 pt-4 sm:pt-6">
+          <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide pb-1">
             {visibility.canSeeWatched && (
               <button
                 onClick={() => setActiveTab("watched")}
-                className={`px-6 py-3 rounded-t-xl transition-all ${
+                className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-xl transition-all whitespace-nowrap text-sm sm:text-base flex-shrink-0 ${
                   activeTab === "watched"
                     ? "bg-purple-500/20 text-purple-300 border-b-2 border-purple-500"
                     : "text-gray-400 hover:text-gray-300"
@@ -345,7 +345,7 @@ export function Profile() {
             {visibility.canSeeFavorites && (
               <button
                 onClick={() => setActiveTab("favorites")}
-                className={`px-6 py-3 rounded-t-xl transition-all ${
+                className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-xl transition-all whitespace-nowrap text-sm sm:text-base flex-shrink-0 ${
                   activeTab === "favorites"
                     ? "bg-purple-500/20 text-purple-300 border-b-2 border-purple-500"
                     : "text-gray-400 hover:text-gray-300"
@@ -357,7 +357,7 @@ export function Profile() {
             {visibility.canSeeWatchlist && (
               <button
                 onClick={() => setActiveTab("watchlist")}
-                className={`px-6 py-3 rounded-t-xl transition-all ${
+                className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-xl transition-all whitespace-nowrap text-sm sm:text-base flex-shrink-0 ${
                   activeTab === "watchlist"
                     ? "bg-purple-500/20 text-purple-300 border-b-2 border-purple-500"
                     : "text-gray-400 hover:text-gray-300"
@@ -369,7 +369,7 @@ export function Profile() {
             {visibility.canSeeReviews && (
               <button
                 onClick={() => setActiveTab("reviews")}
-                className={`px-6 py-3 rounded-t-xl transition-all ${
+                className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-xl transition-all whitespace-nowrap text-sm sm:text-base flex-shrink-0 ${
                   activeTab === "reviews"
                     ? "bg-purple-500/20 text-purple-300 border-b-2 border-purple-500"
                     : "text-gray-400 hover:text-gray-300"
@@ -382,7 +382,7 @@ export function Profile() {
         </div>
 
         {/* Tab Content */}
-        <div className="p-6">
+        <div className="p-3 sm:p-6">
           {currentItems.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-gray-400">Bu bölümde henüz içerik yok</p>

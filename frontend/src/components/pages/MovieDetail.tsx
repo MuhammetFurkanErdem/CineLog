@@ -13,10 +13,6 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import {
-  getReviewsByMovieId,
-  getUserById,
-} from "../../utils/mockData";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { movieService, externalService, jikanService } from "../../utils/api";
@@ -121,9 +117,25 @@ interface AnimeData {
   }>;
 }
 
+// Review interface from backend
+interface MovieReview {
+  id: number;
+  user_id: number;
+  tmdb_id: number;
+  title: string;
+  kisisel_puan: number | null;
+  kisisel_yorum: string;
+  izlenme_tarihi: string;
+  user: {
+    id: number;
+    username: string;
+    email: string;
+    picture: string | null;
+  };
+}
+
 export function MovieDetail() {
   const { movieId } = useParams();
-  const movieReviews = getReviewsByMovieId(movieId || "");
 
   const [movie, setMovie] = useState<TMDBMovie | null>(null);
   const [userFilm, setUserFilm] = useState<UserFilm | null>(null);
@@ -143,6 +155,10 @@ export function MovieDetail() {
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [reviewText, setReviewText] = useState("");
   const [showReviewForm, setShowReviewForm] = useState(false);
+
+  // Movie reviews from backend
+  const [movieReviews, setMovieReviews] = useState<MovieReview[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
 
   // TMDB'den film detaylarını ve kullanıcının film listesini yükle
   useEffect(() => {
@@ -187,6 +203,26 @@ export function MovieDetail() {
     };
 
     fetchMovieData();
+  }, [movieId]);
+
+  // Fetch movie reviews from backend
+  useEffect(() => {
+    const fetchReviews = async () => {
+      if (!movieId) return;
+      
+      setReviewsLoading(true);
+      try {
+        const reviews = await movieService.getMovieReviews(parseInt(movieId));
+        setMovieReviews(reviews);
+      } catch (err) {
+        console.log("İncelemeler yüklenemedi:", err);
+        setMovieReviews([]);
+      } finally {
+        setReviewsLoading(false);
+      }
+    };
+
+    fetchReviews();
   }, [movieId]);
 
   // Fetch external data (TVMaze for TV shows, Jikan for anime)
@@ -276,7 +312,10 @@ export function MovieDetail() {
       }
     } catch (err: any) {
       console.error("Backend güncelleme hatası:", err);
-      // localStorage zaten güncellendi, backend hatası görmezden gel
+      // Kullanıcıya bilgi ver - giriş yapmamış olabilir
+      if (err.response?.status === 401) {
+        alert("Film kaydetmek için giriş yapmalısınız.");
+      }
     } finally {
       setActionLoading(false);
     }
@@ -347,6 +386,14 @@ export function MovieDetail() {
         setIsWatched(true);
       }
       setShowReviewForm(false);
+      
+      // İnceleme paylaşıldıktan sonra listeyi yenile
+      try {
+        const reviews = await movieService.getMovieReviews(parseInt(movieId!));
+        setMovieReviews(reviews);
+      } catch {
+        // Sessizce devam et
+      }
     } catch (err: any) {
       console.error("İnceleme paylaşılırken hata:", err);
       alert(err.response?.data?.detail || "İnceleme paylaşılamadı");
@@ -416,6 +463,9 @@ export function MovieDetail() {
       }
     } catch (err: any) {
       console.error("Backend güncelleme hatası:", err);
+      if (err.response?.status === 401) {
+        alert("Favori eklemek için giriş yapmalısınız.");
+      }
     } finally {
       setActionLoading(false);
     }
@@ -467,6 +517,9 @@ export function MovieDetail() {
       }
     } catch (err: any) {
       console.error("Backend güncelleme hatası:", err);
+      if (err.response?.status === 401) {
+        alert("İzleme listesine eklemek için giriş yapmalısınız.");
+      }
     } finally {
       setActionLoading(false);
     }
@@ -498,10 +551,10 @@ export function MovieDetail() {
     : null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 overflow-x-hidden">
       {/* Hero Section - Kompakt İki Sütun Layout */}
       <div className="relative">
-        <div className="flex flex-col md:flex-row gap-8">
+        <div className="flex flex-col md:flex-row gap-4 sm:gap-8">
           
           {/* ========== SOL SÜTUN: Poster & Platform ========== */}
           <div className="flex-shrink-0 w-full md:w-[300px] space-y-4">
@@ -509,7 +562,7 @@ export function MovieDetail() {
             <img
               src={posterUrl}
               alt={movie.title}
-              className="w-full rounded-xl object-cover shadow-2xl"
+              className="w-full max-w-[250px] mx-auto md:max-w-none rounded-xl object-cover shadow-2xl"
             />
             
             {/* Platform Butonu - Poster ile Aynı Genişlikte */}
@@ -928,9 +981,9 @@ export function MovieDetail() {
       )}
 
       {/* Rating Section */}
-      <div className="bg-slate-900/50 backdrop-blur rounded-xl p-6 border border-purple-500/10">
-        <h2 className="text-2xl text-white mb-4">Puanını Ver</h2>
-        <div className="flex gap-2 mb-4">
+      <div className="bg-slate-900/50 backdrop-blur rounded-xl p-4 sm:p-6 border border-purple-500/10">
+        <h2 className="text-xl sm:text-2xl text-white mb-4">Puanını Ver</h2>
+        <div className="flex gap-1.5 sm:gap-2 mb-4 justify-center sm:justify-start">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => (
             <button
               key={rating}
@@ -938,16 +991,16 @@ export function MovieDetail() {
               onMouseLeave={() => setHoveredRating(0)}
               onClick={() => handleRatingClick(rating)}
               disabled={actionLoading}
-              className="group relative disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group relative disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
             >
               <Star
-                className={`w-8 h-8 transition-all ${
+                className={`w-7 h-7 sm:w-9 sm:h-9 transition-all ${
                   rating <= (hoveredRating || userRating)
                     ? "text-yellow-400 fill-yellow-400"
                     : "text-gray-600"
                 }`}
               />
-              <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-sm text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="absolute -bottom-5 sm:-bottom-6 left-1/2 -translate-x-1/2 text-xs sm:text-sm text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
                 {rating}
               </span>
             </button>
@@ -963,14 +1016,14 @@ export function MovieDetail() {
       </div>
 
       {/* Review Section */}
-      <div className="bg-slate-900/50 backdrop-blur rounded-xl p-6 border border-purple-500/10">
-        <h2 className="text-2xl text-white mb-4">
+      <div className="bg-slate-900/50 backdrop-blur rounded-xl p-4 sm:p-6 border border-purple-500/10">
+        <h2 className="text-xl sm:text-2xl text-white mb-4">
           İnceleme Yaz
         </h2>
         {!showReviewForm ? (
           <button
             onClick={() => setShowReviewForm(true)}
-            className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-xl transition-all border border-purple-500/30"
+            className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-xl transition-all border border-purple-500/30 text-sm sm:text-base"
           >
             + İnceleme Ekle
           </button>
@@ -980,20 +1033,20 @@ export function MovieDetail() {
               value={reviewText}
               onChange={(e) => setReviewText(e.target.value)}
               placeholder="Düşüncelerini paylaş..."
-              className="w-full h-32 bg-slate-800/50 border border-purple-500/20 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+              className="w-full h-32 bg-slate-800/50 border border-purple-500/20 rounded-xl px-3 sm:px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 text-sm sm:text-base"
             />
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               <button
                 onClick={handleReviewSubmit}
                 disabled={actionLoading || !reviewText.trim()}
-                className="px-6 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 sm:px-6 py-2.5 sm:py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm sm:text-base"
               >
                 {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                 Paylaş
               </button>
               <button
                 onClick={() => setShowReviewForm(false)}
-                className="px-6 py-3 bg-slate-800/50 hover:bg-slate-700/50 text-gray-300 rounded-xl transition-all"
+                className="px-4 sm:px-6 py-2.5 sm:py-3 bg-slate-800/50 hover:bg-slate-700/50 text-gray-300 rounded-xl transition-all text-sm sm:text-base"
               >
                 İptal
               </button>
@@ -1004,57 +1057,69 @@ export function MovieDetail() {
 
       {/* Reviews */}
       <div className="space-y-4">
-        <h2 className="text-2xl text-white">
+        <h2 className="text-xl sm:text-2xl text-white">
           İncelemeler ({movieReviews.length})
         </h2>
-        {movieReviews.map((review) => {
-          const user = getUserById(review.userId);
-          if (!user) return null;
+        {reviewsLoading ? (
+          <div className="bg-slate-900/50 backdrop-blur rounded-xl p-4 sm:p-6 border border-purple-500/10 text-center">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto text-purple-400" />
+          </div>
+        ) : movieReviews.length === 0 ? (
+          <div className="bg-slate-900/50 backdrop-blur rounded-xl p-4 sm:p-6 border border-purple-500/10 text-center">
+            <p className="text-gray-400">Henüz inceleme yok. İlk inceleyen sen ol!</p>
+          </div>
+        ) : (
+          movieReviews.map((review) => {
+            const avatarUrl = review.user.picture || 
+              `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.user.username}`;
 
-          return (
-            <div
-              key={review.id}
-              className="bg-slate-900/50 backdrop-blur rounded-xl p-6 border border-purple-500/10"
-            >
-              <div className="flex items-start gap-4">
-                <Link to={`/profile/${user.id}`}>
-                  <img
-                    src={user.avatar}
-                    alt={user.name}
-                    className="w-12 h-12 rounded-full object-cover ring-2 ring-purple-500/30"
-                  />
-                </Link>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Link
-                      to={`/profile/${user.id}`}
-                      className="text-white hover:text-purple-400 transition-colors"
-                    >
-                      {user.name}
-                    </Link>
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                      <span className="text-yellow-400">{review.rating}/10</span>
+            return (
+              <div
+                key={review.id}
+                className="bg-slate-900/50 backdrop-blur rounded-xl p-4 sm:p-6 border border-purple-500/10"
+              >
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <Link to={`/profile/${review.user.id}`}>
+                    <img
+                      src={avatarUrl}
+                      alt={review.user.username}
+                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover ring-2 ring-purple-500/30"
+                    />
+                  </Link>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                      <Link
+                        to={`/profile/${review.user.id}`}
+                        className="text-white hover:text-purple-400 transition-colors text-sm sm:text-base"
+                      >
+                        {review.user.username}
+                      </Link>
+                      {review.kisisel_puan && (
+                        <div className="flex items-center gap-1">
+                          <Star className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400 fill-yellow-400" />
+                          <span className="text-yellow-400 text-sm">{review.kisisel_puan}/10</span>
+                        </div>
+                      )}
+                      <span className="text-gray-600 text-xs sm:text-sm">
+                        {formatDistanceToNow(new Date(review.izlenme_tarihi), {
+                          addSuffix: true,
+                          locale: tr,
+                        })}
+                      </span>
                     </div>
-                    <span className="text-gray-600 text-sm ml-auto">
-                      {formatDistanceToNow(new Date(review.createdAt), {
-                        addSuffix: true,
-                        locale: tr,
-                      })}
-                    </span>
-                  </div>
-                  <p className="text-gray-300 mb-3">{review.comment}</p>
-                  <div className="flex items-center gap-4">
-                    <button className="flex items-center gap-1 text-gray-400 hover:text-pink-400 transition-colors">
-                      <ThumbsUp className="w-4 h-4" />
-                      <span className="text-sm">{review.likes}</span>
-                    </button>
+                    <p className="text-gray-300 mb-3 text-sm sm:text-base break-words">{review.kisisel_yorum}</p>
+                    <div className="flex items-center gap-4">
+                      <button className="flex items-center gap-1 text-gray-400 hover:text-pink-400 transition-colors">
+                        <ThumbsUp className="w-4 h-4" />
+                        <span className="text-sm">0</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     </div>
   );

@@ -240,6 +240,11 @@ class ActivityCommentCreate(BaseModel):
     content: str
 
 
+class ActivityCommentUpdate(BaseModel):
+    """Aktivite yorum güncelleme"""
+    content: str
+
+
 class ActivityCommentResponse(BaseModel):
     """Aktivite yorum response"""
     id: int

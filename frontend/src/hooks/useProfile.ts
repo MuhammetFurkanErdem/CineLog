@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { getUserLibrary, LibraryItem } from "../utils/storage";
 import { useAuth } from "./useAuth";
+import { userService } from "../utils/api";
 import axios from "axios";
 
 type TabType = "watched" | "favorites" | "watchlist" | "reviews";
@@ -23,6 +24,7 @@ export function useProfile({ userId }: UseProfileParams) {
   const { currentUser, token } = useAuth();
   const [fetchedUser, setFetchedUser] = useState<any>(null);
   const [fetchedFilms, setFetchedFilms] = useState<any[]>([]);
+  const [fetchedReviews, setFetchedReviews] = useState<any[]>([]);
   const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatus>({
     isFollowing: false,
     isFollower: false,
@@ -73,9 +75,29 @@ export function useProfile({ userId }: UseProfileParams) {
             console.log("Could not fetch user films:", filmError);
             setFetchedFilms([]);
           }
+          
+          // Fetch user's reviews
+          try {
+            const reviewsResponse = await userService.getUserReviews(profileUserId);
+            console.log('📝 Fetched reviews count:', reviewsResponse.length);
+            setFetchedReviews(reviewsResponse);
+          } catch (reviewError) {
+            console.log("Could not fetch user reviews:", reviewError);
+            setFetchedReviews([]);
+          }
         } catch (error) {
           console.error("Error fetching user data:", error);
           setFetchedUser(null);
+        }
+      } else if (isOwnProfile && currentUser?.id) {
+        // Kendi profil sayfası için reviews fetch
+        try {
+          const reviewsResponse = await userService.getUserReviews(String(currentUser.id));
+          console.log('📝 Fetched own reviews count:', reviewsResponse.length);
+          setFetchedReviews(reviewsResponse);
+        } catch (reviewError) {
+          console.log("Could not fetch own reviews:", reviewError);
+          setFetchedReviews([]);
         }
       }
     };
@@ -94,7 +116,7 @@ export function useProfile({ userId }: UseProfileParams) {
         clearInterval(interval);
       };
     }
-  }, [profileUserId, isOwnProfile, refreshKey]);
+  }, [profileUserId, isOwnProfile, refreshKey, currentUser?.id]);
 
   // Fetch friendship status when viewing other profile
   useEffect(() => {
@@ -195,9 +217,9 @@ export function useProfile({ userId }: UseProfileParams) {
       totalAnimes: watchedItems.filter((item) => item.type === "anime").length,
       totalFavorites: library.filter((item) => item.favorite).length,
       totalWatchlist: library.filter((item) => item.watchlist).length,
-      totalReviews: 0, // Mock for now
+      totalReviews: fetchedReviews.length,
     };
-  }, [library]);
+  }, [library, fetchedReviews]);
 
   // Calculate available tabs based on visibility
   const availableTabs = useMemo<TabType[]>(() => {
@@ -236,8 +258,21 @@ export function useProfile({ userId }: UseProfileParams) {
   }, [library]);
 
   const reviewItems = useMemo<LibraryItem[]>(() => {
-    return []; // Mock for now - will be replaced with real reviews
-  }, []);
+    // Backend'den gelen reviews verilerini LibraryItem formatına dönüştür
+    return fetchedReviews.map(review => ({
+      id: `movie-${review.tmdb_id}`,
+      type: 'movie' as const,
+      title: review.title,
+      poster: review.poster_path ? `https://image.tmdb.org/t/p/w500${review.poster_path}` : '/placeholder-movie.png',
+      year: review.release_date ? new Date(review.release_date).getFullYear() : undefined,
+      rating: review.kisisel_puan || undefined,
+      watched: true,
+      favorite: false,
+      watchlist: false,
+      timestamp: new Date(review.izlenme_tarihi || Date.now()).getTime(),
+      review: review.kisisel_yorum,
+    }));
+  }, [fetchedReviews]);
 
   // Calculate dynamic badges based on user stats
   const calculatedBadges = useMemo(() => {

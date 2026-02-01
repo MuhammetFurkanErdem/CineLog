@@ -202,17 +202,17 @@ export function SeriesDetail() {
   const seasons = Object.keys(episodesBySeason).map(Number).sort((a, b) => a - b);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 overflow-x-hidden">
       {/* Hero Section */}
       <div className="relative">
-        <div className="flex flex-col md:flex-row gap-8">
+        <div className="flex flex-col md:flex-row gap-4 sm:gap-8">
           
           {/* Poster */}
           <div className="flex-shrink-0 w-full md:w-[300px] space-y-4">
             <img
               src={posterUrl}
               alt={series.name}
-              className="w-full rounded-xl object-cover shadow-2xl"
+              className="w-full max-w-[250px] mx-auto md:max-w-none rounded-xl object-cover shadow-2xl"
             />
 
             {/* Status Badge */}

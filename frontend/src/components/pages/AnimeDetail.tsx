@@ -219,17 +219,17 @@ export function AnimeDetail() {
   const posterUrl = anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url || "/placeholder-movie.png";
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 overflow-x-hidden">
       {/* Hero Section */}
       <div className="relative">
-        <div className="flex flex-col md:flex-row gap-8">
+        <div className="flex flex-col md:flex-row gap-4 sm:gap-8">
           
           {/* Poster */}
           <div className="flex-shrink-0 w-full md:w-[300px] space-y-4">
             <img
               src={posterUrl}
               alt={anime.title}
-              className="w-full rounded-xl object-cover shadow-2xl"
+              className="w-full max-w-[250px] mx-auto md:max-w-none rounded-xl object-cover shadow-2xl"
             />
 
             {/* Stats Grid */}

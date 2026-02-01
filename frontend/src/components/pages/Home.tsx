@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { Heart, MessageCircle, Star, Users, User as UserIcon, Globe, Send, X } from "lucide-react";
+import { Heart, MessageCircle, Star, Users, User as UserIcon, Globe, Send, X, Pencil, Check } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { useEffect, useState, useCallback } from "react";
@@ -77,6 +77,10 @@ export function Home() {
   const [commentInput, setCommentInput] = useState<Record<number, string>>({});
   const [showComments, setShowComments] = useState<number | null>(null);
   const [commentLoading, setCommentLoading] = useState<number | null>(null);
+  
+  // Edit comment state
+  const [editingComment, setEditingComment] = useState<number | null>(null);
+  const [editCommentText, setEditCommentText] = useState<string>("");
 
   const getBadgeStyle = (rarity: "legendary" | "rare" | "common") => {
     switch (rarity) {
@@ -196,6 +200,46 @@ export function Home() {
     }
   };
 
+  // Handle start editing comment
+  const handleStartEditComment = (commentId: number, currentContent: string) => {
+    setEditingComment(commentId);
+    setEditCommentText(currentContent);
+  };
+
+  // Handle cancel editing
+  const handleCancelEdit = () => {
+    setEditingComment(null);
+    setEditCommentText("");
+  };
+
+  // Handle update comment
+  const handleUpdateComment = async (filmId: number, commentId: number) => {
+    const content = editCommentText.trim();
+    if (!content) return;
+    
+    try {
+      setCommentLoading(commentId);
+      const updatedComment = await socialService.updateComment(commentId, content);
+      
+      setInteractions(prev => ({
+        ...prev,
+        [filmId]: {
+          ...prev[filmId],
+          comments: prev[filmId].comments.map(c => 
+            c.id === commentId ? { ...c, content: updatedComment.content } : c
+          )
+        }
+      }));
+      
+      setEditingComment(null);
+      setEditCommentText("");
+    } catch (error) {
+      console.error("Yorum güncellenemedi:", error);
+    } finally {
+      setCommentLoading(null);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -248,9 +292,9 @@ export function Home() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
       {/* Welcome Section */}
-      <div className="relative bg-gradient-to-r from-purple-900/40 to-pink-900/40 rounded-2xl p-6 border border-purple-500/20 overflow-hidden">
+      <div className="relative bg-gradient-to-r from-purple-900/40 to-pink-900/40 rounded-2xl p-4 sm:p-6 border border-purple-500/20 overflow-hidden">
         {/* Film Poster Collage Background */}
         <div className="absolute inset-0 opacity-10 blur-sm">
           <div className="absolute inset-0 grid grid-cols-3 gap-2 p-2">
@@ -272,10 +316,10 @@ export function Home() {
           </div>
         </div>
         <div className="relative z-10">
-          <h1 className="text-3xl text-white mb-2">
+          <h1 className="text-2xl sm:text-3xl text-white mb-2">
             Merhaba, {currentUser?.username || "Kullanıcı"}! 👋
           </h1>
-          <p className="text-gray-300">
+          <p className="text-gray-300 text-sm sm:text-base">
             Bu hafta {weeklyMovies} film izledin. {weeklyMovies > 0 ? "Harika gidiyorsun!" : "Haydi film izlemeye başla!"}
           </p>
         </div>
@@ -310,8 +354,8 @@ export function Home() {
       </div>
 
       {/* Badges */}
-      <div className="bg-slate-900/50 backdrop-blur rounded-xl p-6 border border-purple-500/10">
-        <h2 className="text-xl text-white mb-4">Rozetlerim</h2>
+      <div className="bg-slate-900/50 backdrop-blur rounded-xl p-4 sm:p-6 border border-purple-500/10">
+        <h2 className="text-lg sm:text-xl text-white mb-4">Rozetlerim</h2>
         {stats.badges && stats.badges.length > 0 ? (
           <div className="flex flex-wrap gap-3">
             {stats.badges.map((badge, index) => (
@@ -527,18 +571,60 @@ export function Home() {
                                   {formatDistanceToNow(new Date(comment.created_at + 'Z'), { addSuffix: true, locale: tr })}
                                 </span>
                                 {(currentUser?.id === comment.user_id || String(currentUser?.id) === String(comment.user_id)) && (
-                                  <button
-                                    onClick={() => {
-                                      console.log('Delete comment:', { currentUserId: currentUser?.id, commentUserId: comment.user_id, filmId: item.film.id, commentId: comment.id });
-                                      handleDeleteComment(item.film.id, comment.id);
-                                    }}
-                                    className="ml-auto text-gray-500 hover:text-red-400 transition-colors"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
+                                  <div className="ml-auto flex items-center gap-1">
+                                    {editingComment === comment.id ? (
+                                      <>
+                                        <button
+                                          onClick={() => handleUpdateComment(item.film.id, comment.id)}
+                                          disabled={commentLoading === comment.id || !editCommentText.trim()}
+                                          className="text-green-400 hover:text-green-300 transition-colors disabled:opacity-50"
+                                        >
+                                          <Check className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          onClick={handleCancelEdit}
+                                          className="text-gray-500 hover:text-gray-300 transition-colors"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <button
+                                          onClick={() => handleStartEditComment(comment.id, comment.content)}
+                                          className="text-gray-500 hover:text-blue-400 transition-colors"
+                                        >
+                                          <Pencil className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteComment(item.film.id, comment.id)}
+                                          className="text-gray-500 hover:text-red-400 transition-colors"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
                                 )}
                               </div>
-                              <p className="text-gray-300 text-sm mt-1">{comment.content}</p>
+                              {editingComment === comment.id ? (
+                                <input
+                                  type="text"
+                                  value={editCommentText}
+                                  onChange={(e) => setEditCommentText(e.target.value)}
+                                  className="w-full mt-1 bg-slate-700/50 border border-slate-600 rounded px-2 py-1 text-gray-300 text-sm focus:outline-none focus:border-purple-500"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      handleUpdateComment(item.film.id, comment.id);
+                                    } else if (e.key === "Escape") {
+                                      handleCancelEdit();
+                                    }
+                                  }}
+                                  autoFocus
+                                />
+                              ) : (
+                                <p className="text-gray-300 text-sm mt-1">{comment.content}</p>
+                              )}
                             </div>
                           </div>
                         ))}

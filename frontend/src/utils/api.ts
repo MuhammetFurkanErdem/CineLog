@@ -80,6 +80,12 @@ export const userService = {
     const response = await api.get(url);
     return response.data;
   },
+
+  // Kullanıcının incelemeli filmlerini getir
+  getUserReviews: async (userId: string) => {
+    const response = await api.get(`/users/${userId}/reviews`);
+    return response.data;
+  },
 };
 
 export const movieService = {
@@ -128,6 +134,12 @@ export const movieService = {
   // Film sil
   deleteMovie: async (filmId: number) => {
     const response = await api.delete(`/movies/${filmId}`);
+    return response.data;
+  },
+
+  // Film incelemelerini getir (belirli bir TMDB ID için tüm kullanıcıların incelemeleri)
+  getMovieReviews: async (tmdbId: number) => {
+    const response = await api.get(`/movies/tmdb/${tmdbId}/reviews`);
     return response.data;
   },
 
@@ -232,6 +244,12 @@ export const socialService = {
   // Yorumu sil
   deleteComment: async (commentId: number) => {
     const response = await api.delete(`/social/activity/comment/${commentId}`);
+    return response.data;
+  },
+
+  // Yorumu düzenle
+  updateComment: async (commentId: number, content: string) => {
+    const response = await api.put(`/social/activity/comment/${commentId}`, { content });
     return response.data;
   },
 };

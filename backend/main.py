@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from config import get_settings
 from database import init_db
 
@@ -15,6 +16,18 @@ app = FastAPI(
     description="Film takip ve sosyal paylaşım uygulaması",
     version="1.0.0"
 )
+
+# Security Headers Middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # Google OAuth popup iletişimi için gerekli header'lar
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+        response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+        return response
+    
+# Middleware'leri ekle
+app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS ayarları
 app.add_middleware(

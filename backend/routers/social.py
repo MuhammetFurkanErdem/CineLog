@@ -17,6 +17,7 @@ from schemas import (
     ActivityLikeCreate,
     ActivityLikeResponse,
     ActivityCommentCreate,
+    ActivityCommentUpdate,
     ActivityCommentResponse,
     ActivityLikesAndComments
 )
@@ -605,6 +606,49 @@ async def add_comment(
         "film_id": new_comment.film_id,
         "content": new_comment.content,
         "created_at": new_comment.created_at,
+        "user": user
+    }
+
+
+@router.put("/activity/comment/{comment_id}")
+async def update_comment(
+    comment_id: int,
+    comment_data: ActivityCommentUpdate,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
+    """Yorumu güncelle (sadece kendi yorumunu)"""
+    user_id = await get_current_user_id(authorization, db)
+    
+    # Yorum var mı kontrol et
+    comment = db.query(ActivityComment).filter(ActivityComment.id == comment_id).first()
+    
+    if not comment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Yorum bulunamadı"
+        )
+    
+    # Sadece kendi yorumunu düzenleyebilir
+    if comment.user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu yorumu düzenleme yetkiniz yok"
+        )
+    
+    # Yorumu güncelle
+    comment.content = comment_data.content
+    db.commit()
+    db.refresh(comment)
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    return {
+        "id": comment.id,
+        "user_id": comment.user_id,
+        "film_id": comment.film_id,
+        "content": comment.content,
+        "created_at": comment.created_at,
         "user": user
     }
 

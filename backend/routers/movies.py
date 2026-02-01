@@ -126,6 +126,43 @@ async def get_trending_movies():
         return data.get("results", [])
 
 
+@router.get("/tmdb/{tmdb_id}/reviews")
+async def get_movie_reviews(tmdb_id: int, db: Session = Depends(get_db)):
+    """
+    Belirli bir film için tüm kullanıcı incelemelerini getirir.
+    TMDB ID'sine göre filmleri bulur ve kisisel_yorum alanı dolu olanları döndürür.
+    """
+    # Bu TMDB ID'sine sahip tüm kullanıcı filmlerini bul (yorum yazılmış olanlar)
+    films_with_reviews = db.query(Film).filter(
+        Film.tmdb_id == tmdb_id,
+        Film.kisisel_yorum.isnot(None),
+        Film.kisisel_yorum != ""
+    ).order_by(Film.izlenme_tarihi.desc()).all()
+    
+    # Her film için kullanıcı bilgisini ekle
+    reviews = []
+    for film in films_with_reviews:
+        user = db.query(User).filter(User.id == film.user_id).first()
+        if user:
+            reviews.append({
+                "id": film.id,
+                "user_id": film.user_id,
+                "tmdb_id": film.tmdb_id,
+                "title": film.title,
+                "kisisel_puan": film.kisisel_puan,
+                "kisisel_yorum": film.kisisel_yorum,
+                "izlenme_tarihi": film.izlenme_tarihi,
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "picture": user.picture
+                }
+            })
+    
+    return reviews
+
+
 @router.get("/tmdb/{tmdb_id}")
 async def get_movie_details(tmdb_id: int):
     """
@@ -211,19 +248,23 @@ async def add_film_to_list(
     db: Session = Depends(get_db),
 ):
     """
-    Kullanıcının listesine film ekler.
+    Kullanıcının listesine film ekler veya varsa günceller (upsert).
     """
-    # Kullanıcı bu filmi daha önce eklediyse hata ver
+    # Kullanıcı bu filmi daha önce eklediyse güncelle
     existing_film = db.query(Film).filter(
         Film.user_id == user_id,
         Film.tmdb_id == film_data.tmdb_id
     ).first()
     
     if existing_film:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bu film zaten listenizde"
-        )
+        # Mevcut filmi güncelle
+        update_data = film_data.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            if value is not None:  # None değerleri atlama
+                setattr(existing_film, key, value)
+        db.commit()
+        db.refresh(existing_film)
+        return existing_film
     
     # Yeni film ekle
     new_film = Film(

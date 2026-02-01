@@ -363,6 +363,44 @@ async def get_user_films(user_id: int, db: Session = Depends(get_db)):
     return films
 
 
+@router.get("/{user_id}/reviews")
+async def get_user_reviews(user_id: int, db: Session = Depends(get_db)):
+    """
+    Belirtilen kullanıcının incelemeli filmlerini döndürür.
+    kisisel_yorum alanı dolu olan filmler.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcı bulunamadı"
+        )
+    
+    # Yorum yazılmış filmleri getir
+    films_with_reviews = db.query(Film).filter(
+        Film.user_id == user_id,
+        Film.kisisel_yorum.isnot(None),
+        Film.kisisel_yorum != ""
+    ).order_by(Film.izlenme_tarihi.desc()).all()
+    
+    # Her film için detaylı bilgi döndür
+    reviews = []
+    for film in films_with_reviews:
+        reviews.append({
+            "id": film.id,
+            "tmdb_id": film.tmdb_id,
+            "title": film.title,
+            "poster_path": film.poster_path,
+            "release_date": film.release_date,
+            "kisisel_puan": film.kisisel_puan,
+            "kisisel_yorum": film.kisisel_yorum,
+            "izlenme_tarihi": film.izlenme_tarihi
+        })
+    
+    return reviews
+
+
 @router.get("/search/{username}", response_model=List[UserResponse])
 async def search_users(username: str, db: Session = Depends(get_db)):
     """

@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -21,6 +20,9 @@ export default defineConfig({
     },
     sourcemap: false,
     minify: 'esbuild',
+    target: 'esnext',
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 1000,
   },
   server: {
     proxy: {
@@ -29,5 +31,7 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
-  }
+  },
+  // Production mode'u zorla
+  mode: 'production',
 })
