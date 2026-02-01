@@ -3,8 +3,11 @@ import { getUserLibrary, LibraryItem } from "../utils/storage";
 import { useAuth } from "./useAuth";
 import { userService } from "../utils/api";
 import axios from "axios";
+import { config } from "../config";
 
 type TabType = "watched" | "favorites" | "watchlist" | "reviews";
+
+const API_BASE_URL = config.apiBaseUrl;
 
 interface FriendshipStatus {
   isFollowing: boolean;
@@ -44,7 +47,7 @@ export function useProfile({ userId }: UseProfileParams) {
       try {
         setFriendshipLoading(true);
         const response = await axios.get(
-          `http://127.0.0.1:8000/api/social/friends/status/${profileUserId}`,
+          `${API_BASE_URL}/social/friends/status/${profileUserId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         setFriendshipStatus(response.data);
@@ -63,12 +66,12 @@ export function useProfile({ userId }: UseProfileParams) {
         console.log('🔄 Fetching friend profile data:', profileUserId);
         try {
           // Fetch user profile
-          const userResponse = await axios.get(`http://127.0.0.1:8000/api/users/${profileUserId}`);
+          const userResponse = await axios.get(`${API_BASE_URL}/users/${profileUserId}`);
           setFetchedUser(userResponse.data);
           
           // Fetch user's films
           try {
-            const filmsResponse = await axios.get(`http://127.0.0.1:8000/api/users/${profileUserId}/films`);
+            const filmsResponse = await axios.get(`${API_BASE_URL}/users/${profileUserId}/films`);
             console.log('📦 Fetched films count:', filmsResponse.data.length);
             setFetchedFilms(filmsResponse.data);
           } catch (filmError) {
@@ -338,7 +341,7 @@ export function useProfile({ userId }: UseProfileParams) {
     try {
       setFriendshipLoading(true);
       await axios.post(
-        `http://127.0.0.1:8000/api/social/friends/request`,
+        `${API_BASE_URL}/social/friends/request`,
         { friend_id: parseInt(profileUserId) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -356,7 +359,7 @@ export function useProfile({ userId }: UseProfileParams) {
     try {
       setFriendshipLoading(true);
       await axios.delete(
-        `http://127.0.0.1:8000/api/social/friends/${profileUserId}`,
+        `${API_BASE_URL}/social/friends/${profileUserId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       // Refresh friendship status
