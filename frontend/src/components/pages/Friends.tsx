@@ -84,6 +84,7 @@ export function Friends() {
 
         // Arkadaşların uyumluluk skorlarını ve istatistiklerini getir
         if (friendsResponse.length > 0) {
+          const timestamp = Date.now(); // Cache bypass
           const compatibilityPromises = friendsResponse.map((friend: User) =>
             socialService.getCompatibility(friend.id).catch(() => ({ compatibility_percentage: 0, common_films: 0 }))
           );
@@ -117,6 +118,14 @@ export function Friends() {
     };
 
     fetchData();
+    
+    // Auto-refresh compatibility scores every 5 seconds
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-refreshing compatibility scores...');
+      fetchData();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
