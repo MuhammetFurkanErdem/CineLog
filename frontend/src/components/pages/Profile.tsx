@@ -5,6 +5,8 @@ import { useAuth } from "../../hooks/useAuth";
 import { useState, useEffect } from "react";
 import { getActivitiesByUserId, getMovieById, Badge, User } from "../../utils/mockData";
 import { toggleInteraction } from "../../utils/storage";
+import { movieService } from "../../utils/api";
+import { toast } from "sonner";
 
 export function Profile() {
   const { userId } = useParams<{ userId: string }>();
@@ -53,7 +55,8 @@ export function Profile() {
   };
 
   // Handle removing item from library
-  const handleRemoveItem = (item: any, action: 'watched' | 'favorite' | 'watchlist') => {
+  const handleRemoveItem = async (item: any, action: 'watched' | 'favorite' | 'watchlist') => {
+    // LocalStorage'dan kaldır
     toggleInteraction({
       id: item.id,
       type: item.type,
@@ -62,6 +65,32 @@ export function Profile() {
       year: item.year,
       rating: item.rating,
     }, action);
+    
+    // Backend'e sync et (film ise)
+    if (item.type === 'movie') {
+      try {
+        // tmdb_id'yi item.id'den çıkar (format: "movie-12345")
+        const tmdbId = item.id.replace('movie-', '');
+        
+        // Kullanıcının filmlerini getir ve bu filmi bul
+        const userMovies = await movieService.getUserMovies();
+        const userFilm = userMovies.find((m: any) => m.tmdb_id === parseInt(tmdbId));
+        
+        if (userFilm) {
+          // Action'a göre güncelle
+          const updateData: any = {};
+          if (action === 'watched') updateData.izlendi = false;
+          if (action === 'favorite') updateData.is_favorite = false;
+          if (action === 'watchlist') updateData.is_watchlist = false;
+          
+          await movieService.updateMovie(userFilm.id, updateData);
+          toast.success('Film listenizden kaldırıldı');
+        }
+      } catch (error) {
+        console.error('Backend sync error:', error);
+      }
+    }
+    
     // Refresh library data
     refreshLibrary();
   };
