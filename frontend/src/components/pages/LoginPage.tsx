@@ -78,13 +78,19 @@ export default function LoginPage() {
     
     const timer = setTimeout(async () => {
       try {
-        const response = await api.get(`/auth/check-email/${registerEmail}`);
+        const response = await api.get(`/auth/check-email/${encodeURIComponent(registerEmail)}`);
         setEmailAvailable(response.data.available);
-        setEmailMessage(response.data.message);
+        setEmailMessage(response.data.message || "");
       } catch (error: any) {
         console.error("Email check error:", error);
-        setEmailAvailable(null);
-        setEmailMessage(error.response?.data?.message || "Kontrol edilemedi");
+        // Hata durumunda kullanıcının kayıt olmasına izin ver
+        if (error.response?.status === 400) {
+          setEmailAvailable(false);
+          setEmailMessage(error.response?.data?.message || "Bu email zaten kullanılıyor");
+        } else {
+          setEmailAvailable(true); // API hatası durumunda kayda izin ver
+          setEmailMessage("");
+        }
       }
     }, 500);
     
@@ -213,7 +219,7 @@ export default function LoginPage() {
       return;
     }
     
-    if (!usernameAvailable) {
+    if (usernameAvailable !== true) {
       setRegisterError("Kullanıcı adı uygun değil");
       setRegisterLoading(false);
       return;
@@ -238,8 +244,9 @@ export default function LoginPage() {
       await saveUserToStorage();
       navigate("/");
     } catch (error: any) {
-      const message = error.response?.data?.detail || "Kayıt başarısız oldu";
-      setRegisterError(message);
+      console.error("Register error:", error);
+      const message = error.response?.data?.detail || error.response?.data?.message || "Kayıt başarısız oldu";
+      setRegisterError(typeof message === 'string' ? message : JSON.stringify(message));
     } finally {
       setRegisterLoading(false);
     }
@@ -545,9 +552,10 @@ export default function LoginPage() {
                     disabled={
                       registerLoading || 
                       passwordStrength < 100 || 
-                      !usernameAvailable || 
+                      usernameAvailable !== true || 
                       emailAvailable === false ||
                       !registerEmail ||
+                      !registerUsername ||
                       registerPassword !== registerPasswordConfirm
                     }
                     className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold rounded-lg transition-all shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"

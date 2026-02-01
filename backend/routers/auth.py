@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from typing import Optional
 import httpx
+import re
 
 from database import get_db
 from models import User
@@ -184,7 +185,8 @@ async def register(
     # Username validasyonu
     username = register_data.username.lower().strip()
     
-    if not username.isalnum() and '_' not in username:
+    # Username sadece harf, rakam ve alt çizgi içerebilir
+    if not re.match(r'^[a-z0-9_]+$', username):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Kullanıcı adı sadece harf, rakam ve alt çizgi içerebilir"
