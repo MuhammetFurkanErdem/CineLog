@@ -21,8 +21,8 @@ app = FastAPI(
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        # Google OAuth popup iletişimi için gerekli header'lar
-        response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+        # Google OAuth için COOP ayarlarını gevşet
+        response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
         response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
         return response
     
