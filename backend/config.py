@@ -45,9 +45,12 @@ class Settings(BaseSettings):
         "http://www.furkanerdem.me",
         "https://cinelog.furkanerdem.me",
         "https://www.cinelog.furkanerdem.me",
-        # Vercel
+        # Vercel (tüm preview deployments dahil)
         "https://cinelog.vercel.app",
         "https://cine-log.vercel.app",
+        # Vercel preview URLs
+        "https://cinelog-git-main-muhammetfurkanerdems-projects.vercel.app",
+        "https://cinelog-muhammetfurkanerdems-projects.vercel.app",
     ]
     
     # Environment
